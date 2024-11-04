@@ -128,7 +128,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
                     // If Alt+Backtick is pressed, show the process of similar process groups
                     else if (g_IsAltBacktick) {
                         if (g_AltBacktickWndInfo.hWnd == nullptr) {            
-                            if (!(GetWindowLong(item.hWnd, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
+                            if (!(GetWindowLongPtr(item.hWnd, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
                                g_AltBacktickWndInfo = item;
                                AT_LOG_INFO("g_AltBacktickWndInfo: %s", WStrToUTF8(g_AltBacktickWndInfo.ProcessName).c_str());
                             } 
@@ -164,9 +164,17 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
                         //AT_LOG_INFO("Inserting hWnd: %0#9x, title: %s", item.hWnd, WStrToUTF8(item.Title).c_str());
                         vItems->push_back(std::move(item));
                     }
+                } else {
+                    AT_LOG_INFO(
+                        "Failed to GetModuleFileNameEx for hWnd = [%#x], title = [%s]",
+                        hWnd,
+                        GetWindowTitleExA(hWnd).c_str());
                 }
 
                 CloseHandle(hProcess);
+            } else {            
+                AT_LOG_INFO(
+                    "Failed to get information for hWnd = [%#x], title = [%s]", hWnd, GetWindowTitleExA(hWnd).c_str());
             }
         }
     }
@@ -927,7 +935,7 @@ INT_PTR CALLBACK AltTabWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         SetListViewCustomColors(hListView, g_Settings.LVBackgroundColor, g_Settings.LVFontColor);
 
         // Set window transparency
-        SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+        SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
         SetLayeredWindowAttributes(hWnd, RGB(255, 255, 255), (BYTE)g_Settings.Transparency, LWA_ALPHA);
 
         //std::vector<AltTabWindowData> altTabWindows;
@@ -1155,13 +1163,13 @@ bool IsAltTabWindow(HWND hWnd) {
 
     // Even the owner window is hidden we are getting the window styles, so make
     // sure that the owner window is visible before checking the window styles
-    DWORD ownerES = GetWindowLong(hOwner, GWL_EXSTYLE);
+    LONG_PTR ownerES = GetWindowLongPtr(hOwner, GWL_EXSTYLE);
     if (ownerES && IsWindowVisible(hOwner) && !((ownerES & WS_EX_TOOLWINDOW) && !(ownerES & WS_EX_APPWINDOW))
         && !IsInvisibleWin10BackgroundAppWindow(hOwner)) {
         return true;
     }
 
-    DWORD windowES = GetWindowLong(hWnd, GWL_EXSTYLE);
+    LONG_PTR windowES = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
     if (windowES && !((windowES & WS_EX_TOOLWINDOW) && !(windowES & WS_EX_APPWINDOW))
         && !IsInvisibleWin10BackgroundAppWindow(hWnd)) {
         return true;

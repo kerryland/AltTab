@@ -248,7 +248,7 @@ INT_PTR CALLBACK ATSettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
     //    HWND hStatic   = (HWND)lParam;
 
     //    // Check if the control is a group box (BS_GROUPBOX style)
-    //    if (GetWindowLong(hStatic, GWL_STYLE) & BS_GROUPBOX) {
+    //    if (GetWindowLongPtr(hStatic, GWL_STYLE) & BS_GROUPBOX) {
     //        AT_LOG_INFO("BS_GROUPBOX: Group Box Found");
     //        // Set the text color for the group box
     //        SetTextColor(hdcStatic, RGB(0, 0, 255));
@@ -864,7 +864,7 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     SetWindowPos(hDlg, HWND_TOP, posX, posY, 0, 0, SWP_NOSIZE);
  
     // Set the dialog as an app window, otherwise not displayed in task bar
-    SetWindowLong(hDlg, GWL_EXSTYLE, GetWindowLong(hDlg, GWL_EXSTYLE) | WS_EX_APPWINDOW);
+    SetWindowLongPtr(hDlg, GWL_EXSTYLE, GetWindowLongPtr(hDlg, GWL_EXSTYLE) | WS_EX_APPWINDOW);
  
     // Needs to be called after the dialog is shown
     bool settingsModified = AreSettingsModified(hDlg);
