@@ -922,178 +922,192 @@ static void SetListViewCustomColors(HWND hListView, COLORREF backgroundColor, CO
     SendMessageW(hListView, LVM_SETTEXTCOLOR,   0, (LPARAM)textColor);
 }
 
-LRESULT CALLBACK SearchStringSubclassProc(
-    HWND       hWnd,
-    UINT       uMsg,
-    WPARAM     wParam,
-    LPARAM     lParam,
-    UINT_PTR   /*uIdSubclass*/,
-    DWORD_PTR  /*dwRefData*/)
-{
-    //AT_LOG_TRACE;
-    //AT_LOG_INFO(std::format("uMsg: {:4}, wParam: {}, lParam: {}", uMsg, wParam, lParam).c_str());
-    auto vkCode = wParam;
+
+// Helper function to handle common navigation and window management keys identically to the original code
+inline bool HandleCommonAltTabKeys(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT& outResult) {
+    const auto vkCode = wParam;
     const bool isShiftPressed = GetAsyncKeyState(VK_SHIFT) & 0x8000;
 
+    AT_LOG_INFO("HandleCommonAltKeys. key: %d", wParam);
+
+    // ----------------------------------------------------------------------------
+    // VK_ESCAPE
+    // ----------------------------------------------------------------------------
+    if (wParam == VK_ESCAPE) {
+        // Retain original conditional logging approach implicitly by calling DefSubclassProc
+        DestroyAltTabWindow();
+        outResult = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_DOWN
+    // ----------------------------------------------------------------------------
+    else if (wParam == VK_DOWN) {
+        AT_LOG_INFO("Down Pressed!");
+        ATWListViewSelectNextItem();
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_UP
+    // ----------------------------------------------------------------------------
+    else if (wParam == VK_UP) {
+        AT_LOG_INFO("Up Pressed!");
+        ATWListViewSelectPrevItem();
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_HOME / VK_PRIOR
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_HOME || vkCode == VK_PRIOR) {
+        AT_LOG_INFO("Home/PageUp Pressed!");
+        if (!g_AltTabWindows.empty()) {
+            ATWListViewSelectItem(0);
+        }
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_END / VK_NEXT
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_END || vkCode == VK_NEXT) {
+        AT_LOG_INFO("End/PageDown Pressed!");
+        if (!g_AltTabWindows.empty()) {
+            ATWListViewSelectItem((int)g_AltTabWindows.size() - 1);
+        }
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_DELETE
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_DELETE) {
+        if (isShiftPressed) {
+            AT_LOG_INFO("Shift+Delete Pressed!");
+            int ind = ATWListViewGetSelectedItem();
+            if (ind == -1) {
+                outResult = TRUE;
+                return true;
+            }
+            g_AltTabWindows[ind].IsBeingClosed = true;
+            TerminateProcessEx(g_AltTabWindows[ind].PID);
+        } else {
+            AT_LOG_INFO("Delete Pressed!");
+            const int ind = ATWListViewGetSelectedItem();
+            if (ind == -1) {
+                outResult = TRUE;
+                return true;
+            }
+            AT_LOG_INFO("Ind: %d, Title: %s", ind, WStrToUTF8(g_AltTabWindows[ind].Title).c_str());
+            ATCloseWindow(ind);
+        }
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // Backtick (VK_OEM_3)
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_OEM_3) { // 0xC0 - '`~' for US
+        AT_LOG_INFO("Backtick Pressed!, g_IsAltBacktick = %d", g_IsAltBacktick);
+        const int direction = isShiftPressed ? -1 : 1;
+
+        const int selectedInd = ATWListViewGetSelectedItem();
+        if (selectedInd == -1) {
+            outResult = TRUE;
+            return true;
+        }
+
+        const int N = (int)g_AltTabWindows.size();
+        const auto& processName = g_AltTabWindows[selectedInd].ProcessName;
+        const int pgInd = GetProcessGroupIndex(processName);
+        int nextInd = (selectedInd + N + direction) % N;
+
+        if (g_IsAltBacktick) {
+            ATWListViewSelectItem(nextInd);
+            outResult = TRUE;
+            return true;
+        }
+
+        // Maintained the exact sequence of distinct if checks to avoid macro/side-effect deviations
+        for (int i = 1; i < N; ++i) {
+            nextInd = (selectedInd + N + i * direction) % N;
+            if (IsSimilarProcess(pgInd, g_AltTabWindows[nextInd].ProcessName)) {
+                break;
+            }
+            if (EqualsIgnoreCase(processName, g_AltTabWindows[nextInd].ProcessName)) {
+                break;
+            }
+            nextInd = -1;
+        }
+
+        if (nextInd != -1) {
+            ATWListViewSelectItem(nextInd);
+        }
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_F1
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_F1) {
+        DestroyAltTabWindow();
+        if (isShiftPressed) {
+            DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), nullptr, ATAboutDlgProc);
+        } else {
+            ShowHelpWindow();
+        }
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_F2
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_F2) {
+        DestroyAltTabWindow();
+        if (g_hSettingsWnd == nullptr) {
+            DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_SETTINGS), nullptr, ATSettingsDlgProc);
+        } else {
+            SetForegroundWindow(g_hSettingsWnd);
+        }
+        outResult = TRUE;
+        return true;
+    }
+    // ----------------------------------------------------------------------------
+    // VK_RETURN
+    // ----------------------------------------------------------------------------
+    else if (vkCode == VK_RETURN) {
+        AT_LOG_INFO("Enter Pressed!");
+        DestroyAltTabWindow(true);
+        outResult = TRUE;
+        return true;
+    }
+
+    return false;
+}
+
+
+LRESULT CALLBACK SearchStringSubclassProc(
+    HWND hWnd,
+    UINT uMsg,
+    WPARAM wParam,
+    LPARAM lParam,
+    UINT_PTR /*uIdSubclass*/,
+    DWORD_PTR /*dwRefData*/) {
     switch (uMsg) {
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN: {
-        //AT_LOG_INFO("WM_KEYDOWN/WM_SYSKEYDOWN: wParam = 0x%02X", (unsigned int)wParam);
-        // ----------------------------------------------------------------------------
-        // VK_ESCAPE
-        // ----------------------------------------------------------------------------
-        if (wParam == VK_ESCAPE) {
-            AT_LOG_INFO("VK_ESCAPE");
-            DestroyAltTabWindow();
-        }
-        // ----------------------------------------------------------------------------
-        // VK_DOWN
-        // ----------------------------------------------------------------------------
-        else if (wParam == VK_DOWN) {
-            AT_LOG_INFO("Down Pressed!");
-            ATWListViewSelectNextItem();
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_DOWN
-        // ----------------------------------------------------------------------------
-        else if (wParam == VK_UP) {
-            AT_LOG_INFO("Up Pressed!");
-            ATWListViewSelectPrevItem();
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_HOME / VK_PRIOR
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_HOME || vkCode == VK_PRIOR) {
-            AT_LOG_INFO("Home/PageUp Pressed!");
-            if (!g_AltTabWindows.empty()) {
-                ATWListViewSelectItem(0);
+        LRESULT commonResult = 0;
+        if (HandleCommonAltTabKeys(hWnd, uMsg, wParam, lParam, commonResult)) {
+            // Contextual string logging for VK_ESCAPE handled natively via the shared proc call
+            if (wParam == VK_ESCAPE) {
+                AT_LOG_INFO("VK_ESCAPE");
             }
-            return TRUE;
+            return commonResult;
         }
-        // ----------------------------------------------------------------------------
-        // VK_END / VK_NEXT
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_END || vkCode == VK_NEXT) {
-            AT_LOG_INFO("End/PageDown Pressed!");
-            if (!g_AltTabWindows.empty()) {
-                ATWListViewSelectItem((int)g_AltTabWindows.size() - 1);
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_DELETE
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_DELETE) {
-            if (isShiftPressed) {
-                AT_LOG_INFO("Shift+Delete Pressed!");
-                int ind = ATWListViewGetSelectedItem();
-                if (ind == -1)
-                    return TRUE;
-                g_AltTabWindows[ind].IsBeingClosed = true;
-                TerminateProcessEx(g_AltTabWindows[ind].PID);
-            } else {
-                AT_LOG_INFO("Delete Pressed!");
 
-                // Send the SC_CLOSE command to the window
-                const int ind = ATWListViewGetSelectedItem();
-                if (ind == -1)
-                    return TRUE;
-                AT_LOG_INFO("Ind: %d, Title: %s", ind, WStrToUTF8(g_AltTabWindows[ind].Title).c_str());
-                ATCloseWindow(ind);
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // Backtick
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_OEM_3) { // 0xC0 - '`~' for US
-            AT_LOG_INFO("Backtick Pressed!, g_IsAltBacktick = %d", g_IsAltBacktick);
-            const int direction = isShiftPressed ? -1 : 1;
-
-            // Move to next / previous same item based on the direction
-            const int selectedInd = ATWListViewGetSelectedItem();
-            if (selectedInd == -1)
-                return TRUE;
-
-            const int N = (int)g_AltTabWindows.size();
-            const auto& processName = g_AltTabWindows[selectedInd].ProcessName; // Selected process name
-            const int pgInd = GetProcessGroupIndex(processName);                // Index in ProcessGroupList
-            int nextInd = (selectedInd + N + direction) % N;                    // Next index to select
-
-            // If the AltTab window is invoked with Alt + Backtick, then we should
-            // move to the next item in the list without checking the process name.
-            if (g_IsAltBacktick) {
-                ATWListViewSelectItem(nextInd);
-                return TRUE;
-            }
-
-            // If the control comes to here, AltTab window is invoked with Alt + Tab
-            // Check if the next item is similar to the selected item
-            for (int i = 1; i < N; ++i) {
-                nextInd = (selectedInd + N + i * direction) % N;
-                if (IsSimilarProcess(pgInd, g_AltTabWindows[nextInd].ProcessName)) {
-                    break;
-                }
-                if (EqualsIgnoreCase(processName, g_AltTabWindows[nextInd].ProcessName)) {
-                    break;
-                }
-                nextInd = -1;
-            }
-
-            if (nextInd != -1)
-                ATWListViewSelectItem(nextInd);
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_F1
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_F1) {
-            DestroyAltTabWindow();
-            if (isShiftPressed) {
-                DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), nullptr, ATAboutDlgProc);
-            } else {
-                ShowHelpWindow();
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // Shift + VK_F1
-        // ----------------------------------------------------------------------------
-        else if (isShiftPressed && vkCode == VK_F1) {
-            DestroyAltTabWindow();
-            DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), nullptr, ATAboutDlgProc);
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_F2
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_F2) {
-            DestroyAltTabWindow();
-            // Do NOT assign owner for this, if owner is assigned and the settings
-            // dialog is not active, then it won't be displayed in alt tab windows list.
-            if (g_hSettingsWnd == nullptr) {
-                DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_SETTINGS), nullptr, ATSettingsDlgProc);
-            } else {
-                SetForegroundWindow(g_hSettingsWnd);
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_ENTER
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_RETURN) {
-            AT_LOG_INFO("Enter Pressed!");
-            DestroyAltTabWindow(true);
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // WM_CHAR won't be sent when ALT is pressed, this is the alternative to handle when a key is pressed.
-        // And collect the chars and form a search string.
-        // Ignore Backtick (`), Tab, Backspace, and non-printable characters while forming search string.
-        // ----------------------------------------------------------------------------
-        else if ((g_IsAltTab || g_IsAltBacktick) && !g_IsAltCtrlTab) {
+        // Fallback processing for search character registration
+        if ((g_IsAltTab || g_IsAltBacktick) && !g_IsAltCtrlTab) {
             wchar_t ch = '\0';
             const bool isChar = ATMapVirtualKey((UINT)wParam, ch);
             bool update = false;
@@ -1104,100 +1118,47 @@ LRESULT CALLBACK SearchStringSubclassProc(
                 g_SearchString.pop_back();
                 update = true;
             }
-            //AT_LOG_INFO("IsChar, %d, Update: %d, Char: %#4x, SearchString: [%s], Len(SearchString): %d", isChar, update, ch, WStrToUTF8(g_SearchString).c_str(), (int)g_SearchString.size());
 
             if (update) {
                 SendMessageW(g_hSearchString, WM_SETTEXT, 0, (LPARAM)(g_SearchString).c_str());
-
-                // Set the cursor to the end of the text
                 SendMessageW(g_hSearchString, EM_SETSEL, (WPARAM)g_SearchString.size(), (LPARAM)g_SearchString.size());
                 return 0;
             }
 
-            // Let default handler update text first
             LRESULT result = isChar ? 0 : DefSubclassProc(hWnd, uMsg, wParam, lParam);
-
-            // Invalidate to trigger repaint
             InvalidateRect(hWnd, nullptr, TRUE);
-
             return result;
         }
-        // AT_LOG_INFO("Not handled: wParam: %0#4x, iswprint: %d", wParam, iswprint((wint_t)wParam));
     } break;
 
-    // Show the application tray menu on right click / context menu request
     case WM_CONTEXTMENU: {
         AT_LOG_INFO("WM_CONTEXTMENU");
         POINT pt;
         GetCursorPos(&pt);
         const bool result = ShowTrayContextMenu(g_hAltTabWnd, pt);
 
-        // Close the AltTab window after showing the context menu and handling the menu command.
         if (result) {
             DestroyAltTabWindow();
         }
         return 0;
     } break;
 
-    // ----------------------------------------------------------------------------
-    // WM_CHAR, NOTE: This is also needed to handle character input when ALT is not pressed. Ex: Alt+Ctrl+Tab
-    // ----------------------------------------------------------------------------
     case WM_CHAR: {
         AT_LOG_INFO("WM_CHAR: wParam = 0x%02X", (unsigned int)wParam);
         const wchar_t ch = (wchar_t)wParam;
-        // Handle character input for search functionality
         if (!(ch == '`' || ch == VK_TAB || ch == VK_DELETE || ch == VK_SPACE || ch == '\0')) {
-            // Let the default handler process the character input
             LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
 
-            // After processing the character, update the search filter
             wchar_t searchString[_MAX_PATH] = { 0 };
             GetWindowTextW(g_hSearchString, searchString, _MAX_PATH);
             g_SearchString = searchString;
             return result;
         }
-        return 0; // Ignore other characters
-    } break;
-
-#if 0
-    // Last key is not getting cleared in AltTab window mode.
-    // First WM_KEYDOWN is sent then WM_PAINT.
-    case WM_PAINT: {
-        AT_LOG_INFO("WM_PAINT");
-        //  Draw search icon inside the edit control
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-
-        // Draw background & text
-        DefSubclassProc(hWnd, uMsg, wParam, lParam);
-
-        // Get the dimensions of the edit control
-        RECT rcClient;
-        GetClientRect(hWnd, &rcClient);
-        const int iconSize = 16;
-        const int x = rcClient.right - iconSize - 6;    // Padding from right
-        const int y = (rcClient.bottom - iconSize) / 2; // vertically centered
-        ImageList_DrawEx(
-            g_hImageList16, g_nImgSearchInd, hdc, x, y, iconSize, iconSize, CLR_NONE, CLR_NONE, ILD_NORMAL);
-
-        EndPaint(hWnd, &ps);
-
         return 0;
     } break;
-#endif // 0
 
     case WM_NOTIFY: {
         AT_LOG_INFO("WM_NOTIFY");
-        //LPNMHDR nmhdr = reinterpret_cast<LPNMHDR>(lParam);
-        //if (nmhdr->code == LVN_ITEMCHANGED) {
-        //    LPNMLISTVIEW pnmListView = reinterpret_cast<LPNMLISTVIEW>(nmhdr);
-
-        //    if ((pnmListView->uChanged & LVIF_STATE) && (pnmListView->uNewState & LVIS_SELECTED)) {
-        //        // The mouse has moved over the item
-        //        // You can show a message or perform any action here
-        //        MessageBox(hListView, L"Mouse moved over item!", L"ListView Notification", MB_OK | MB_ICONINFORMATION);
-        //    }
-        //}
     } break;
     }
 
@@ -1205,237 +1166,46 @@ LRESULT CALLBACK SearchStringSubclassProc(
 }
 
 LRESULT CALLBACK ListViewSubclassProc(
-    HWND       hListView,
-    UINT       uMsg,
-    WPARAM     wParam,
-    LPARAM     lParam,
-    UINT_PTR   /*uIdSubclass*/,
-    DWORD_PTR  /*dwRefData*/)
-{
-    //AT_LOG_INFO(std::format("uMsg: {:4}, wParam: {}, lParam: {}", uMsg, wParam, lParam).c_str());
-    auto vkCode = wParam;
-    const bool isShiftPressed = GetAsyncKeyState(VK_SHIFT) & 0x8000;
-
+    HWND hListView,
+    UINT uMsg,
+    WPARAM wParam,
+    LPARAM lParam,
+    UINT_PTR /*uIdSubclass*/,
+    DWORD_PTR /*dwRefData*/) {
     switch (uMsg) {
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN: {
-        // ----------------------------------------------------------------------------
-        // VK_ESCAPE
-        // ----------------------------------------------------------------------------
-        if (wParam == VK_ESCAPE) {
-            AT_LOG_INFO("VK_ESCAPE Pressed!, g_hContextMenu: %p", g_hContextMenu);
-            DestroyAltTabWindow();
-        }
-        // ----------------------------------------------------------------------------
-        // VK_DOWN
-        // ----------------------------------------------------------------------------
-        else if (wParam == VK_DOWN) {
-            AT_LOG_INFO("Down Pressed!");
-            ATWListViewSelectNextItem();
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_DOWN
-        // ----------------------------------------------------------------------------
-        else if (wParam == VK_UP) {
-            AT_LOG_INFO("Up Pressed!");
-            ATWListViewSelectPrevItem();
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_HOME / VK_PRIOR
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_HOME || vkCode == VK_PRIOR) {
-            AT_LOG_INFO("Home/PageUp Pressed!");
-            if (!g_AltTabWindows.empty()) {
-                ATWListViewSelectItem(0);
+        LRESULT commonResult = 0;
+        if (HandleCommonAltTabKeys(hListView, uMsg, wParam, lParam, commonResult)) {
+            if (wParam == VK_ESCAPE) {
+                AT_LOG_INFO("VK_ESCAPE Pressed!, g_hContextMenu: %p", g_hContextMenu);
             }
-            return TRUE;
+            return commonResult;
         }
-        // ----------------------------------------------------------------------------
-        // VK_END / VK_NEXT
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_END || vkCode == VK_NEXT) {
-            AT_LOG_INFO("End/PageDown Pressed!");
-            if (!g_AltTabWindows.empty()) {
-                ATWListViewSelectItem((int)g_AltTabWindows.size() - 1);
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_DELETE
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_DELETE) {
-            if (isShiftPressed) {
-                AT_LOG_INFO("Shift+Delete Pressed!");
-                int ind = ATWListViewGetSelectedItem();
-                if (ind == -1)
-                    return TRUE;
-                g_AltTabWindows[ind].IsBeingClosed = true;
-                TerminateProcessEx(g_AltTabWindows[ind].PID);
-            } else {
-                AT_LOG_INFO("Delete Pressed!");
-
-                // Send the SC_CLOSE command to the window
-                const int ind = ATWListViewGetSelectedItem();
-                if (ind == -1)
-                    return TRUE;
-                AT_LOG_INFO("Ind: %d, Title: %s", ind, WStrToUTF8(g_AltTabWindows[ind].Title).c_str());
-                ATCloseWindow(ind);
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // Backtick
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_OEM_3) { // 0xC0 - '`~' for US
-            AT_LOG_INFO("Backtick Pressed!, g_IsAltBacktick = %d", g_IsAltBacktick);
-            const int direction = isShiftPressed ? -1 : 1;
-
-            // Move to next / previous same item based on the direction
-            const int selectedInd = ATWListViewGetSelectedItem();
-            if (selectedInd == -1)
-                return TRUE;
-
-            const int N = (int)g_AltTabWindows.size();
-            const auto& processName = g_AltTabWindows[selectedInd].ProcessName; // Selected process name
-            const int pgInd = GetProcessGroupIndex(processName);                // Index in ProcessGroupList
-            int nextInd = (selectedInd + N + direction) % N;                    // Next index to select
-
-            // If the AltTab window is invoked with Alt + Backtick, then we should
-            // move to the next item in the list without checking the process name.
-            if (g_IsAltBacktick) {
-                ATWListViewSelectItem(nextInd);
-                return TRUE;
-            }
-
-            // If the control comes to here, AltTab window is invoked with Alt + Tab
-            // Check if the next item is similar to the selected item
-            for (int i = 1; i < N; ++i) {
-                nextInd = (selectedInd + N + i * direction) % N;
-                if (IsSimilarProcess(pgInd, g_AltTabWindows[nextInd].ProcessName)) {
-                    break;
-                }
-                if (EqualsIgnoreCase(processName, g_AltTabWindows[nextInd].ProcessName)) {
-                    break;
-                }
-                nextInd = -1;
-            }
-
-            if (nextInd != -1)
-                ATWListViewSelectItem(nextInd);
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_F1
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_F1) {
-            DestroyAltTabWindow();
-            if (isShiftPressed) {
-                DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), nullptr, ATAboutDlgProc);
-            } else {
-                ShowHelpWindow();
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // Shift + VK_F1
-        // ----------------------------------------------------------------------------
-        else if (isShiftPressed && vkCode == VK_F1) {
-            DestroyAltTabWindow();
-            DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), nullptr, ATAboutDlgProc);
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_F2
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_F2) {
-            DestroyAltTabWindow();
-            // Do NOT assign owner for this, if owner is assigned and the settings
-            // dialog is not active, then it won't be displayed in alt tab windows list.
-            if (g_hSettingsWnd == nullptr) {
-                DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_SETTINGS), nullptr, ATSettingsDlgProc);
-            } else {
-                SetForegroundWindow(g_hSettingsWnd);
-            }
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // VK_ENTER
-        // ----------------------------------------------------------------------------
-        else if (vkCode == VK_RETURN) {
-            AT_LOG_INFO("Enter Pressed!");
-            DestroyAltTabWindow(true);
-            return TRUE;
-        }
-        // ----------------------------------------------------------------------------
-        // WM_CHAR won't be sent when ALT is pressed, this is the alternative to handle when a key is pressed.
-        // And collect the chars and form a search string.
-        // Ignore Backtick (`), Tab, Backspace, and non-printable characters while forming search string.
-        // ----------------------------------------------------------------------------
-        else {
-            // No need to handle anything here.
-#if 0
-            AT_LOG_WARN("Shouldn't come to here: WM_KEYDOWN/WM_SYSKEYDOWN: wParam = 0x%02X", (unsigned int)wParam);
-            wchar_t ch = '\0';
-            bool isChar = ATMapVirtualKey((UINT)wParam, ch);
-            bool update = false;
-            if (!(wParam == '`' || wParam == VK_TAB || wParam == VK_BACK || ch == '\0') && isChar) {
-                g_SearchString += ch;
-                update = true;
-            } else if (wParam == VK_BACK && !g_SearchString.empty()) {
-                g_SearchString.pop_back();
-                update = true;
-            }
-            AT_LOG_INFO("Char: %#4x, SearchString: [%s]", ch, WStrToUTF8(g_SearchString).c_str());
-            update && SendMessageW(g_hSearchString, WM_SETTEXT, 0, (LPARAM)g_SearchString.c_str());
-#endif // 0
-        }
-        // AT_LOG_INFO("Not handled: wParam: %0#4x, iswprint: %d", wParam, iswprint((wint_t)wParam));
     } break;
 
     case WM_NOTIFY: {
         AT_LOG_INFO("WM_NOTIFY");
-        //LPNMHDR nmhdr = reinterpret_cast<LPNMHDR>(lParam);
-        //if (nmhdr->code == LVN_ITEMCHANGED) {
-        //    LPNMLISTVIEW pnmListView = reinterpret_cast<LPNMLISTVIEW>(nmhdr);
-
-        //    if ((pnmListView->uChanged & LVIF_STATE) && (pnmListView->uNewState & LVIS_SELECTED)) {
-        //        // The mouse has moved over the item
-        //        // You can show a message or perform any action here
-        //        MessageBox(hListView, L"Mouse moved over item!", L"ListView Notification", MB_OK | MB_ICONINFORMATION);
-        //    }
-        //}
     } break;
 
     case WM_MOUSEMOVE: {
-        //AT_LOG_INFO("WM_MOUSEMOVE");
-        // Track mouse leave event
         TRACKMOUSEEVENT tme;
-        tme.cbSize    = sizeof(tme);
-        tme.dwFlags   = TME_LEAVE;
+        tme.cbSize = sizeof(tme);
+        tme.dwFlags = TME_LEAVE;
         tme.hwndTrack = hListView;
         TrackMouseEvent(&tme);
     } break;
 
     case WM_MOUSELEAVE: {
-        //AT_LOG_INFO("WM_MOUSELEAVE");
-        // Hide the tooltip when the mouse leaves the ListView
         if (g_Settings.ShowProcessInfoTooltip) {
             HideCustomToolTip();
         }
 
-        // Reset the hovered item index and hot item index
         g_MouseHoverIndex = -1;
         g_nLVHotItem = -1;
-
-        // Invalidate the ListView to remove any highlighting
         InvalidateRect(hListView, nullptr, TRUE);
     } break;
 
-    // ----------------------------------------------------------------------------
-    // Owner draw item
-    // ----------------------------------------------------------------------------
     case WM_DRAWITEM: {
         LPDRAWITEMSTRUCT lpDrawItemStruct = (LPDRAWITEMSTRUCT)lParam;
         return AT::ATListViewDrawItem(hListView, lpDrawItemStruct);
@@ -1444,6 +1214,7 @@ LRESULT CALLBACK ListViewSubclassProc(
 
     return DefSubclassProc(hListView, uMsg, wParam, lParam);
 }
+
 
 void WindowResizeAndPosition(HWND hWnd, int wndWidth, int wndHeight) {
     // Get the dimensions of the screen
