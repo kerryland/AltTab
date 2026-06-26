@@ -197,9 +197,10 @@ namespace AT {
             GetTextExtentPointW(hdc, matchText, matchTextLen, &matchSize);
             RECT matchRect = rci;
             matchRect.right = AT_MIN(matchRect.right, matchRect.left + matchSize.cx);
-
             HBRUSH hbr = CreateSolidBrush(g_Settings.LVHighlightBackgroundColor);
             FillRect(hdc, &matchRect, hbr);
+            DeleteObject(hbr);
+            
             SetTextColor(hdc, g_Settings.LVHighlightTextColor);
             DrawTextW(hdc, matchText, matchTextLen, &matchRect, format);
 
@@ -669,6 +670,17 @@ void RefreshAltTabWindow() {
     // But the icons in the ImageList are drawn using the ImageList g_hLVImageList.
     HIMAGELIST hImageListDummy = ImageList_Create(imageWidth, imageHeight + 1, ILC_COLOR32 | ILC_MASK, 0, 1);
     HIMAGELIST hImageList = ImageList_Create(imageWidth, imageHeight, ILC_COLOR32 | ILC_MASK, 0, 1);
+
+     //Destroy old image lists first
+    if (g_hLVImageList) {
+        ImageList_Destroy(g_hLVImageList);
+        g_hLVImageList = nullptr;
+    }
+    // Also need to destroy the old dummy image list
+    HIMAGELIST hOldDummy = ListView_GetImageList(g_hListView, LVSIL_SMALL);
+    if (hOldDummy) {
+        ImageList_Destroy(hOldDummy);
+    }
 
     for (const auto& item : g_AltTabWindows) {
         ImageList_AddIcon(hImageList, item.hIcon);
@@ -1959,12 +1971,15 @@ bool IsExcludedProcess(const std::wstring& processName) {
 // AltTab window procedure handlers
 // ----------------------------------------------------------------------------
 
+DWORD prevGdiObjectCount = 0;
+DWORD prevUserObjectCount = 0;
+
 BOOL ATW_OnCreate(HWND hWnd, LPCREATESTRUCT /*lpCreateStruct*/) {
     AT_LOG_TRACE;
 
     g_hAltTabWnd = hWnd;
     AT_LOG_INFO("AltTab Window Handle: [%#08X]", g_hAltTabWnd);
-
+    
     // Get screen width and height
     const int screenWidth  = GetSystemMetrics(SM_CXSCREEN);
     const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -1987,9 +2002,14 @@ BOOL ATW_OnCreate(HWND hWnd, LPCREATESTRUCT /*lpCreateStruct*/) {
     // Calculate the required height for the static control based on font size
     HDC hdc = GetDC(hWnd);
 
-    g_hSSFont = CreateFontEx(hdc, g_Settings.SSFontName, g_Settings.SSFontSize, g_Settings.SSFontStyle);
-    g_hLVFont = CreateFontEx(hdc, g_Settings.LVFontName, g_Settings.LVFontSize, g_Settings.LVFontStyle);
-
+    // TODO: Handle changes to font in settings file.
+    if (g_hSSFont == nullptr) {
+        g_hSSFont = CreateFontEx(hdc, g_Settings.SSFontName, g_Settings.SSFontSize, g_Settings.SSFontStyle);
+    }
+    if (g_hLVFont == nullptr) {
+        g_hLVFont = CreateFontEx(hdc, g_Settings.LVFontName, g_Settings.LVFontSize, g_Settings.LVFontStyle);
+    }
+    
     SelectObject(hdc, g_hSSFont);
 
     TEXTMETRIC tm;
@@ -2038,7 +2058,7 @@ BOOL ATW_OnCreate(HWND hWnd, LPCREATESTRUCT /*lpCreateStruct*/) {
 
     // Subclass the edit control
     SetWindowSubclass(hSearchString, SearchStringSubclassProc, 1, 0);
-
+ 
     // Here adding 1 pixel to the Y position to avoid the static text control overlap with the ListView control
     if (g_Settings.ShowSearchString) {
         Y += searchStringHeight;
@@ -2094,46 +2114,7 @@ BOOL ATW_OnCreate(HWND hWnd, LPCREATESTRUCT /*lpCreateStruct*/) {
     SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
     SetLayeredWindowAttributes(hWnd, RGB(255, 255, 255), (BYTE)g_Settings.Transparency, LWA_ALPHA);
 
-    // std::vector<AltTabWindowData> altTabWindows;
-    EnumWindows(EnumWindowsProc, (LPARAM)(&g_AltTabWindows));
-    AT_LOG_INFO("g_AltTabWindows.size() : %d", g_AltTabWindows.size());
-
-    // Identify the processes which are running from different paths
-    std::unordered_map<std::wstring, std::unordered_set<std::wstring>> processMap;
-    for (const auto& item : g_AltTabWindows) {
-        const std::wstring key = item.ProcessName + item.Title;
-        processMap[key].insert(item.FullPath);
-    }
-    for (auto& item : g_AltTabWindows) {
-        const std::wstring key = item.ProcessName + item.Title;
-        if (processMap[key].size() > 1) {
-            item.IsConflictProcess = true;
-        }
-    }
-
-    // Create ImageList and add icons
-    const int imageWidth = GetSystemMetrics(SM_CXICON);
-    const int imageHeight = GetSystemMetrics(SM_CYICON);
-
-    // Create ImageList and add icons, assign a dummy ImageList to set the row height
-    // The row height is determined by the height of the icons in the ImageList assigned as LVSIL_SMALL
-    // But the icons in the ImageList are drawn using the ImageList g_hLVImageList.
-    HIMAGELIST hImageListDummy = ImageList_Create(imageWidth, imageHeight + 1, ILC_COLOR32 | ILC_MASK, 0, 1);
-    HIMAGELIST hImageList = ImageList_Create(imageWidth, imageHeight, ILC_COLOR32 | ILC_MASK, 0, 1);
-
-    for (const auto& item : g_AltTabWindows) {
-        ImageList_AddIcon(hImageList, item.hIcon);
-    }
-
-    // Set the ImageList for the ListView
-    // Assign as the small image list (LVSIL_SMALL affects row height)
-    ListView_SetImageList(hListView, hImageListDummy, LVSIL_SMALL);
-    g_hLVImageList = hImageList;
-
-    // Add windows to ListView
-    for (int i = 0; i < g_AltTabWindows.size(); ++i) {
-        AddListViewItem(hListView, i, g_AltTabWindows[i]);
-    }
+    RefreshAltTabWindow();
 
     // Compute the required height and resize the ListView
     // Get the header control associated with the ListView
@@ -2173,7 +2154,7 @@ BOOL ATW_OnCreate(HWND hWnd, LPCREATESTRUCT /*lpCreateStruct*/) {
 
     SetForegroundWindow(hWnd);
     SetFocus(hSearchString);
-
+ 
     // Select the first row
     LVITEM lvItem;
     lvItem.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
@@ -2182,18 +2163,33 @@ BOOL ATW_OnCreate(HWND hWnd, LPCREATESTRUCT /*lpCreateStruct*/) {
 
     // Create a timer to refresh the ListView when there is a change in windows
     SetTimer(hWnd, TIMER_WINDOW_COUNT, TIMER_WINDOW_COUNT_ELAPSE, nullptr);
-
+   
     return TRUE;
+}
+
+
+HBRUSH g_hSSBackgroundBrush = NULL;
+COLORREF g_cachedSSBackgroundColor = 0xFFFFFFFF;
+
+LRESULT ATW_HandleSearchControlColors(HDC hDC, COLORREF textColor, COLORREF bgColor) {
+    SetTextColor(hDC, textColor);
+    SetBkColor(hDC, bgColor);
+
+    if (bgColor != g_cachedSSBackgroundColor || !g_hSSBackgroundBrush) {
+        if (g_hSSBackgroundBrush) {
+            DeleteObject(g_hSSBackgroundBrush);
+        }
+        g_hSSBackgroundBrush = CreateSolidBrush(bgColor);
+        g_cachedSSBackgroundColor = bgColor;
+    }
+
+    return (INT_PTR)g_hSSBackgroundBrush;
 }
 
 LRESULT ATW_OnCtlColorEdit(HWND hWnd, HDC hDC, HWND hCtl, UINT /*type*/) {
     AT_LOG_TRACE;
     if (hCtl == g_hSearchString) {
-        // Set the text color and background color of the edit control
-        SetTextColor(hDC, g_Settings.SSFontColor);
-        SetBkColor(hDC, g_Settings.SSBackgroundColor);
-
-        return (INT_PTR)CreateSolidBrush(g_Settings.SSBackgroundColor);
+        return ATW_HandleSearchControlColors(hDC, g_Settings.SSFontColor, g_Settings.SSBackgroundColor);
     }
     return DefWindowProc(hWnd, WM_CTLCOLOREDIT, (WPARAM)hDC, (LPARAM)hCtl);
 }
@@ -2201,11 +2197,7 @@ LRESULT ATW_OnCtlColorEdit(HWND hWnd, HDC hDC, HWND hCtl, UINT /*type*/) {
 LRESULT ATW_OnCtlColorStatic(HWND hWnd, HDC hDC, HWND hCtl, UINT /*type*/) {
     AT_LOG_TRACE;
     if (hCtl == g_hSearchString) {
-        // Set the text color and background color of the static text control
-        SetTextColor(hDC, g_Settings.SSFontColor);
-        SetBkColor(hDC, g_Settings.SSBackgroundColor);
-
-        return (INT_PTR)CreateSolidBrush(g_Settings.SSBackgroundColor);
+        return ATW_HandleSearchControlColors(hDC, g_Settings.SSFontColor, g_Settings.SSBackgroundColor);
     }
     return DefWindowProc(hWnd, WM_CTLCOLORSTATIC, (WPARAM)hDC, (LPARAM)hCtl);
 }
@@ -2238,6 +2230,7 @@ void ATW_OnSysCommand(HWND hwnd, UINT cmd, int x, int y) {
 void ATW_OnClose(HWND /*hwnd*/) {
     AT_LOG_TRACE;
 
+    // TODO: Never called?
     // Release the fonts
     if (g_hLVFont != nullptr) {
         DeleteObject(g_hLVFont);
@@ -2491,6 +2484,12 @@ INT_PTR CALLBACK ATAboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
     case WM_DESTROY:
         DestroyIcon((HICON)SendMessageW(hDlg, WM_GETICON, ICON_SMALL, 0));
         DestroyIcon((HICON)SendMessageW(hDlg, WM_GETICON, ICON_BIG, 0));
+        
+        // Clean up the cached brush
+        if (g_hSSBackgroundBrush) {
+            DeleteObject(g_hSSBackgroundBrush);
+            g_hSSBackgroundBrush = NULL;
+        }
         break;
     }
     return (INT_PTR)FALSE;

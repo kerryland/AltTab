@@ -887,6 +887,7 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     SetDlgItemText    (hDlg, IDC_EDIT_SS_BANNER_TEXT          , settings.SSCueBannerText.c_str()     );
     SetDlgItemText    (hDlg, IDC_EDIT_SIMILAR_PROCESS_GROUPS  , settings.SimilarProcessGroups.c_str());
  
+    // TODO: Probably not cleaned up
     HFONT    hFont     = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                                      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                      DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Lucida Console");
@@ -960,6 +961,8 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     LOGFONT lf = {};
     GetObjectW(hBoldFont, sizeof(LOGFONT), &lf);
     lf.lfWeight = FW_BOLD;
+
+    // TODO: Probably not cleaned up
     hBoldFont = CreateFontIndirectW(&lf);
 
     SendMessageW(GetDlgItem(hDlg, IDC_GROUPBOX_STORAGE           ), WM_SETFONT, (WPARAM)hBoldFont, TRUE);
