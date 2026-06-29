@@ -633,7 +633,7 @@ HWND ShowAltTabWindow(HWND& hAltTabWnd, int direction) {
     tme.dwFlags   = TME_LEAVE;
     tme.hwndTrack = hAltTabWnd;
     TrackMouseEvent(&tme);
-
+    
     return hAltTabWnd;
 #endif // 0
 }
@@ -1006,9 +1006,9 @@ inline bool HandleCommonAltTabKeys(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         return true;
     }
     // ----------------------------------------------------------------------------
-    // Backtick (VK_OEM_3)
+    // Backtick
     // ----------------------------------------------------------------------------
-    else if (vkCode == VK_OEM_3) { // 0xC0 - '`~' for US
+    else if (vkCode == AT_NON_BEEPING_SEARCH_KEY) {
         AT_LOG_INFO("Backtick Pressed!, g_IsAltBacktick = %d", g_IsAltBacktick);
         const int direction = isShiftPressed ? -1 : 1;
 
@@ -1105,13 +1105,13 @@ LRESULT CALLBACK SearchStringSubclassProc(
             }
             return commonResult;
         }
-
-        // Fallback processing for search character registration
+        
+           // Fallback processing for search character registration
         if ((g_IsAltTab || g_IsAltBacktick) && !g_IsAltCtrlTab) {
             wchar_t ch = '\0';
             const bool isChar = ATMapVirtualKey((UINT)wParam, ch);
             bool update = false;
-            if (isChar && !(wParam == '`' || wParam == VK_DELETE || wParam == VK_TAB || ch == '\0')) {
+            if (isChar && !(wParam == g_Settings.HKBacktickKey)) {
                 g_SearchString += ch;
                 update = true;
             } else if (wParam == VK_BACK && !g_SearchString.empty()) {
@@ -2230,7 +2230,7 @@ INT_PTR CALLBACK ATAboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
         SetWindowLong(hDlg, GWL_EXSTYLE, GetWindowLong(hDlg, GWL_EXSTYLE) | WS_EX_APPWINDOW);
 
         std::wstring productInfo = std::format(L"<a href=\"{}\">{}</a> v{}", AT_PRODUCT_PAGE, AT_PRODUCT_NAMEW, AT_VERSION_TEXTW);
-        std::wstring copyright   = std::format(L"Copyright © {} <a href=\"{}\">{}</a>", AT_PRODUCT_YEARW, AT_PRODUCT_PAGE, AT_AUTHOR_NAME);
+        std::wstring copyright   = std::format(L"Copyright \u00A9 {} <a href=\"{}\">{}</a>", AT_PRODUCT_YEARW, AT_PRODUCT_PAGE, AT_AUTHOR_NAME);
 
         SetDlgItemTextW(hDlg, IDC_SYSLINK_ABOUT_PRODUCT_NAME, productInfo.c_str());
         SetDlgItemTextW(hDlg, IDC_SYSLINK_ABOUT_COPYRIGHT   , copyright.c_str());

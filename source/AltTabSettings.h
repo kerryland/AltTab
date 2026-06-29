@@ -22,6 +22,7 @@ using StringList           = std::vector<std::wstring>;
 #define DEFAULT_ALT_TAB_ENABLED              true
 #define DEFAULT_ALT_BACKTICK_ENABLED         true
 #define DEFAULT_ALT_CTRL_TAB_ENABLED         true
+#define DEFAULT_BACKTICK_KEY                 L"0xC0"   // aka VK_OEM_3, US `~ key
 #define DEFAULT_SS_CUE_BANNER_TEXT           L"Search windows by title or process name..."
 #define DEFAULT_SS_FONT_NAME                 L"Lucida Handwriting"
 #define DEFAULT_SS_FONT_SIZE                 11
@@ -72,6 +73,7 @@ struct AltTabSettings {
     bool                   HKAltTabEnabled;            // Alt+Tab enabled
     bool                   HKAltBacktickEnabled;       // Alt+Backtick enabled
     bool                   HKAltCtrlTabEnabled;        // Alt+Ctrl+Tab enabled
+    WPARAM                 HKBacktickKey;              // What key is the 'backtick' key
     // ----------------------------------------------------------------------------
     // SearchString Font Name, Size, Style, Color and Background Color
     // ----------------------------------------------------------------------------
