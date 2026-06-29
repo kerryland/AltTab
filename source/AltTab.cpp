@@ -469,7 +469,8 @@ LRESULT CALLBACK LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 // ----------------------------------------------------------------------------
                 // Alt + Backtick
                 // ----------------------------------------------------------------------------
-                else if (g_Settings.HKAltBacktickEnabled && vkCode == VK_OEM_3) { // 0xC0
+                else if (g_Settings.HKAltBacktickEnabled && vkCode == g_Settings.HKBacktickKey) {
+
                     g_IsAltTab      = false;
                     g_IsAltBacktick = true;
 
@@ -558,7 +559,7 @@ LRESULT CALLBACK LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 // gets opened.
                 //
                 // Now, send WM_KEYDOWN to g_hAltTabWnd, there handle.
-                if (vkCode == VK_OEM_3) { // 0xC0
+                if (vkCode == g_Settings.HKBacktickKey) {
                     //AT_LOG_INFO("Backtick Pressed!");
                     PostMessage(g_hListView, WM_KEYDOWN, vkCode, 0);
                     return TRUE;

@@ -35,6 +35,7 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings);
 void ATReadSettingsFromUI(HWND hDlg, AltTabSettings& settings);
 void AddTooltips         (HWND hDlg);
 void ATLogSettings       (const AltTabSettings& settings);
+int64_t HexToDecimal(const std::wstring& hexStr);
 
 namespace {
     // Sections
@@ -72,6 +73,7 @@ namespace {
     const wchar_t* ALTTAB_ENABLED            = L"AltTabEnabled"           ;
     const wchar_t* ALTBACKTICK_ENABLED       = L"AltBacktickEnabled"      ;
     const wchar_t* ALTCTRLTAB_ENABLED        = L"AltCtrlTabEnabled"       ;
+    const wchar_t* BACKTICK_KEY              = L"BacktickKey";
     const wchar_t* SIMILAR_PROCESS_GROUPS    = L"SimilarProcessGroups"    ;
     const wchar_t* ENABLED                   = L"Enabled"                 ;
     const wchar_t* PROCESS_LIST              = L"ProcessList"             ;
@@ -109,6 +111,7 @@ void AltTabSettings::Reset() {
     HKAltTabEnabled            = DEFAULT_ALT_TAB_ENABLED            ;
     HKAltBacktickEnabled       = DEFAULT_ALT_BACKTICK_ENABLED       ;
     HKAltCtrlTabEnabled        = DEFAULT_ALT_CTRL_TAB_ENABLED       ;
+    HKBacktickKey              = HexToDecimal(DEFAULT_BACKTICK_KEY);
     SSCueBannerText            = DEFAULT_SS_CUE_BANNER_TEXT         ;
     SSFontName                 = DEFAULT_SS_FONT_NAME               ;
     SSFontSize                 = DEFAULT_SS_FONT_SIZE               ;
@@ -479,9 +482,14 @@ std::wstring ATSettingsFilePath(bool overwrite) {
         fs << ";        0xBB : Green component"                                                 << std::endl;
         fs << ";        0xCC : Blue component"                                                  << std::endl;
         fs << ";   3. FontStyle: normal / italic / bold / bold italic"                          << std::endl;
-        fs << ";   4. Please delete this file to create a new settings file when AltTab opens." << std::endl;
-        fs << ";   5. Please use tray menu Reload AltTabSettings.ini / Reload in Settings"      << std::endl;
-        fs << ";      dialog to make use of new settings without restarting AltTab."            << std::endl;
+        fs << ";   4. BacktickKey: Is the hex value of a virtual key code, as defined here:" << std::endl;
+        fs << ";      https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes" << std::endl;
+        fs << ";      You might like to try: 0xC0 (VK_OEM_3) for US Keyboard" << std::endl;
+        fs << ";                             0xDC (VK_OEM_5) for Italian Keyboard" << std::endl;
+        fs << ";                             0xDE (VK_OEM_7) for French Keyboard" << std::endl;
+        fs << ";   5. Please delete this file to create a new settings file when AltTab opens." << std::endl;
+        fs << ";   6. Please use tray menu Reload AltTabSettings.ini / Reload in Settings" << std::endl;
+        fs << ";      dialog to make use of new settings without restarting AltTab." << std::endl;
         fs << "; -----------------------------------------------------------------------------" << std::endl;
         fs.close();
         ATSettingsToFile(settingsFilePath.wstring());
@@ -511,6 +519,32 @@ void ReadSetting(const std::wstring& iniFile, LPCTSTR section, LPCTSTR keyName, 
     GetPrivateProfileStringW(section, keyName, defaultValue, buffer, bufferSize, iniFile.c_str());
     value = buffer;
 }
+int64_t HexToDecimal(const std::wstring& hexStr) {
+    std::wregex hexRegex(L"^(0[xX])?[0-9a-fA-F]+$");
+    if (!std::regex_match(hexStr, hexRegex)) {
+        AT_LOG_DEBUG("%S does not seem to be a hex value", hexStr.c_str());
+        return 0;
+    }
+
+    const wchar_t* str = hexStr.c_str();
+
+    // Skip "0x" or "0X" prefix if present
+    if (hexStr.length() >= 2 && str[0] == L'0' && (str[1] == L'x' || str[1] == L'X')) {
+        str += 2;
+    }
+
+    wchar_t* endPtr = nullptr;
+    uint64_t value = wcstoull(str, &endPtr, 16);
+
+    return value;
+}
+
+const wchar_t* DecimalToHex(uint64_t decimal) {
+    static wchar_t buffer[32];
+    swprintf_s(buffer, L"0x%llX", decimal);
+    return buffer;
+}
+
 
 /*!
  * \brief Write the current settings the given file path
@@ -525,10 +559,13 @@ void ATSettingsToFile(const std::wstring& iniFile) {
     const std::wstring LVBackgroundColor          = ColorRefToRGBString(g_Settings.LVBackgroundColor         );
     const std::wstring LVHighlightTextColor       = ColorRefToRGBString(g_Settings.LVHighlightTextColor      );
     const std::wstring LVHighlightBackgroundColor = ColorRefToRGBString(g_Settings.LVHighlightBackgroundColor);
+    const std::wstring HKBacktickKeyHex = DecimalToHex(g_Settings.HKBacktickKey);
 
     WriteSetting(iniFile, HOTKEYS           , ALTTAB_ENABLED           , g_Settings.HKAltTabEnabled         );
     WriteSetting(iniFile, HOTKEYS           , ALTBACKTICK_ENABLED      , g_Settings.HKAltBacktickEnabled    );
     WriteSetting(iniFile, HOTKEYS           , ALTCTRLTAB_ENABLED       , g_Settings.HKAltCtrlTabEnabled     );
+    WriteSetting(iniFile, HOTKEYS           , BACKTICK_KEY             , HKBacktickKeyHex);
+
     WriteSetting(iniFile, SEARCH_STRING     , CUE_BANNER_TEXT          , g_Settings.SSCueBannerText         );
     WriteSetting(iniFile, SEARCH_STRING     , FONT_NAME                , g_Settings.SSFontName              );
     WriteSetting(iniFile, SEARCH_STRING     , FONT_SIZE                , g_Settings.SSFontSize              );
@@ -574,10 +611,14 @@ void ATLoadSettings() {
     DWORD LVBackgroundColor          = 0;
     DWORD LVHighlightTextColor       = 0;
     DWORD LVHighlightBackgroundColor = 0;
+    std::wstring HKBacktickKeyHex;
 
+    // Setting default values here seems a bit silly if we can just call `g_Settings.Reset();` instead. That way
+    // defaults are in one place.
     ReadSetting(iniFile, HOTKEYS           , ALTTAB_ENABLED           , DEFAULT_ALT_TAB_ENABLED            , g_Settings.HKAltTabEnabled         );
     ReadSetting(iniFile, HOTKEYS           , ALTBACKTICK_ENABLED      , DEFAULT_ALT_BACKTICK_ENABLED       , g_Settings.HKAltBacktickEnabled    );
     ReadSetting(iniFile, HOTKEYS           , ALTCTRLTAB_ENABLED       , DEFAULT_ALT_CTRL_TAB_ENABLED       , g_Settings.HKAltCtrlTabEnabled     );
+    ReadSetting(iniFile, HOTKEYS           , BACKTICK_KEY             , DEFAULT_BACKTICK_KEY               , HKBacktickKeyHex);
     ReadSetting(iniFile, SEARCH_STRING     , CUE_BANNER_TEXT          , DEFAULT_SS_CUE_BANNER_TEXT         , g_Settings.SSCueBannerText         );
     ReadSetting(iniFile, SEARCH_STRING     , FONT_NAME                , DEFAULT_SS_FONT_NAME               , g_Settings.SSFontName              );
     ReadSetting(iniFile, SEARCH_STRING     , FONT_SIZE                , DEFAULT_SS_FONT_SIZE               , g_Settings.SSFontSize              );
@@ -615,7 +656,15 @@ void ATLoadSettings() {
     g_Settings.LVBackgroundColor          = RGBIntToColorRef(LVBackgroundColor         );
     g_Settings.LVHighlightTextColor       = RGBIntToColorRef(LVHighlightTextColor      );
     g_Settings.LVHighlightBackgroundColor = RGBIntToColorRef(LVHighlightBackgroundColor);
-
+    g_Settings.HKBacktickKey              = HexToDecimal(HKBacktickKeyHex);
+    if (g_Settings.HKBacktickKey == 0) {
+        AT_LOG_WARN(
+            "%ls=%ls is not valid hex. Defaulting to %ls",
+            BACKTICK_KEY,
+            HKBacktickKeyHex.c_str(),
+            DEFAULT_BACKTICK_KEY);
+        g_Settings.HKBacktickKey = HexToDecimal(DEFAULT_BACKTICK_KEY);
+    }
     // Clear the previous ProcessGroupsList
     g_Settings.ProcessGroupsList.clear();
 

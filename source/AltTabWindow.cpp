@@ -1020,7 +1020,7 @@ LRESULT CALLBACK SearchStringSubclassProc(
         // ----------------------------------------------------------------------------
         // Backtick
         // ----------------------------------------------------------------------------
-        else if (vkCode == VK_OEM_3) { // 0xC0 - '`~' for US
+        else if (vkCode == g_Settings.HKBacktickKey) { // 0xC0 - '`~' for US
             AT_LOG_INFO("Backtick Pressed!, g_IsAltBacktick = %d", g_IsAltBacktick);
             const int direction = isShiftPressed ? -1 : 1;
 
@@ -1300,7 +1300,7 @@ LRESULT CALLBACK ListViewSubclassProc(
         // ----------------------------------------------------------------------------
         // Backtick
         // ----------------------------------------------------------------------------
-        else if (vkCode == VK_OEM_3) { // 0xC0 - '`~' for US
+        else if (vkCode == g_Settings.HKBacktickKey) { // 0xC0 - '`~' for US
             AT_LOG_INFO("Backtick Pressed!, g_IsAltBacktick = %d", g_IsAltBacktick);
             const int direction = isShiftPressed ? -1 : 1;
 
