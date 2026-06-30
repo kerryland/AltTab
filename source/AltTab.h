@@ -3,6 +3,9 @@
 #include "resource.h"
 #include <string>
 
+// We send this unused value instead of VK_OEM_3 because it doesn't make Windows go "beep"
+#define AT_NON_BEEPING_SEARCH_KEY 0x9F
+
 struct ToolTipInfo {
     std::wstring  ToolTipText;
     int           Duration;

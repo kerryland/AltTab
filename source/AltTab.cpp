@@ -561,7 +561,7 @@ LRESULT CALLBACK LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Now, send WM_KEYDOWN to g_hAltTabWnd, there handle.
                 if (vkCode == g_Settings.HKBacktickKey) {
                     //AT_LOG_INFO("Backtick Pressed!");
-                    PostMessage(g_hListView, WM_KEYDOWN, vkCode, 0);
+                    PostMessage(g_hListView, WM_KEYDOWN, AT_NON_BEEPING_SEARCH_KEY, 0);
                     return TRUE;
                 }
 
