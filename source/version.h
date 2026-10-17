@@ -1,6 +1,6 @@
 #pragma once
 
-#define AT_VERSION_MAJOR         2026
+#define AT_VERSION_MAJOR         0
 #define AT_VERSION_MINOR         1
 #define AT_VERSION_PATCH         0
 #define AT_VERSION_BUILD         0
@@ -29,5 +29,5 @@
 #define AT_PRODUCT_NAMEW         TEXT(AT_PRODUCT_NAME)
 #define AT_PRODUCT_VERSIONA      ATSTR(AT_PRODUCT_YEARA.AT_VERSION_MINOR)
 #define AT_PRODUCT_VERSIONW      ATSTR(AT_PRODUCT_YEARA.AT_VERSION_MINOR)
-#define AT_LEGAL_COPYRIGHT       "Copyright © 2026 Lokesh Govindu"
+#define AT_LEGAL_COPYRIGHT       "Copyright © 0 Lokesh Govindu"
 #define AT_FILE_DESCRIPTION      "AltTab Switcher"

@@ -1,6 +1,6 @@
-2026.1.0.0
-AltTab_2026.1.0.0_x64.7z
-2026.1.0.0 new features and bug fixes
+0.1.0.0
+AltTab_0.1.0.0_x64.7z
+0.1.0.0 new features and bug fixes
 -------------------------------------
 + Used edit control instead of static text control for search string. We can see
   cue banner search text when the search string is empty.

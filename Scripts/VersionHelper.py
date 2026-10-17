@@ -1,6 +1,5 @@
 import argparse
 import subprocess
-from datetime import datetime
 from pathlib import Path
 import CreateVersionH
 
@@ -14,15 +13,6 @@ def read_version_info():
     if len(version_parts) != 4:
         # If version format is incorrect, reset to default
         version_parts = ["0", "0", "0", "0"]
-
-    # Update major version with year if needed
-    current_year = str(datetime.now().year)
-
-    if version_parts[0] < current_year:
-        version_parts[0] = current_year
-        version_parts[1] = "1"  # Reset minor version if major version changes
-        version_parts[2] = "0"  # Reset patch version if major version changes
-        version_parts[3] = "0"  # Reset build number if major version changes
 
     return version_parts
 

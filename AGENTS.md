@@ -33,7 +33,7 @@ The code is split into focused modules (each has a matching `.h`):
 
 ## Versioning — `source/version.h` is GENERATED
 - Do not edit `source/version.h` by hand. Source of truth is `Scripts\VersionInfo.txt` (`MAJOR.MINOR.PATCH.BUILD`); regenerate via `python Scripts\CreateVersionH.py` (fills `Scripts\version.h.template`).
-- `VersionHelper.read_version_info()` forces MAJOR to the current year and resets MINOR/PATCH/BUILD when the year changes — bump the year, don't fight it.
+- `VersionHelper.read_version_info()` returns `VersionInfo.txt` verbatim (no year rollover). Set the full `MAJOR.MINOR.PATCH.BUILD` there; bump what you want.
 - Version text is also mirrored to root `version.txt` and `ReleaseNotes.txt` (check-for-updates / changelog); keep them in sync.
 - Packaging: `python Scripts\CreatePackages.py` builds via `devenv` after sourcing a `vcvarsall`, hardcoded to the VS 2022 Professional path, and requires `pip install py7zr`. Outputs `Releases\AltTab_<ver>_<config>_x64.7z`.
 
