@@ -99,12 +99,26 @@ std::string WStrToUTF8(const std::wstring& wstr) {
 }
 
 std::string GetWindowTitleExA(HWND hWnd) {
-    const int bufferSize = GetWindowTextLengthA(hWnd) + 1;
-    std::string windowTitle(bufferSize, '\0');
-    if (bufferSize > 1) {
-        GetWindowTextA(hWnd, &windowTitle[0], bufferSize);
+    // Time-limited request: a slow/hung window must not block the caller.
+    // (Used for logging, so a best-effort, bounded read is all we need.)
+    wchar_t buffer[256] = {};
+    DWORD_PTR result = 0;
+    if (!SendMessageTimeoutW(
+            hWnd,
+            WM_GETTEXT,
+            256,
+            reinterpret_cast<LPARAM>(buffer),
+            SMTO_ABORTIFHUNG,
+            1000,
+            &result)) {
+        return {};
     }
-    return windowTitle;
+
+    const std::wstring title(buffer);
+    const int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, title.c_str(), (int)title.size(), nullptr, 0, nullptr, nullptr);
+    std::string utf8(sizeNeeded, 0);
+    WideCharToMultiByte(CP_UTF8, 0, title.c_str(), (int)title.size(), &utf8[0], sizeNeeded, nullptr, nullptr);
+    return utf8;
 }
 
 FuzzyMatchResult GetPartialRatioW(const std::wstring& s1, const std::wstring& s2) {

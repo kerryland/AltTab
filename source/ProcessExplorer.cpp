@@ -10,6 +10,13 @@
 
 #pragma comment(lib, "dwmapi.lib")
 
+namespace {
+// Every request AltTab sends to another window/process is time-limited, so a
+// slow-responding or hung window can never stall the keyboard hook or the
+// window enumeration (which previously let Windows' own switcher win).
+constexpr DWORD kWindowReplyTimeoutMs = 250;
+} // namespace
+
 namespace AT {
     void GetPEInfo(
         const std::wstring& filePath,
@@ -111,20 +118,29 @@ bool IsAltTabWindow(HWND hWnd) {
 
 HICON GetWindowIcon(HWND hWnd) {
     HICON hIcon = nullptr;
+    DWORD_PTR result = 0;
+
+    // Time-limited request; a hung window must not block enumeration.
     LRESULT responding = SendMessageTimeout(
-        hWnd, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 10, reinterpret_cast<PDWORD_PTR>(&hIcon));
+        hWnd, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, kWindowReplyTimeoutMs, reinterpret_cast<PDWORD_PTR>(&hIcon));
 
     if (responding) {
         if (hIcon)
             return hIcon;
 
-        hIcon = (HICON)SendMessageW(hWnd, WM_GETICON, ICON_SMALL2, 0);
-        if (hIcon)
-            return hIcon;
+        result = 0;
+        if (SendMessageTimeout(
+                hWnd, WM_GETICON, ICON_SMALL2, 0, SMTO_ABORTIFHUNG, kWindowReplyTimeoutMs, &result)
+            && result != 0) {
+            return (HICON)result;
+        }
 
-        hIcon = (HICON)SendMessageW(hWnd, WM_GETICON, ICON_SMALL, 0);
-        if (hIcon)
-            return hIcon;
+        result = 0;
+        if (SendMessageTimeout(
+                hWnd, WM_GETICON, ICON_SMALL, 0, SMTO_ABORTIFHUNG, kWindowReplyTimeoutMs, &result)
+            && result != 0) {
+            return (HICON)result;
+        }
     }
 
     hIcon = (HICON)GetClassLongPtr(hWnd, GCLP_HICON);
@@ -175,10 +191,20 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
     std::filesystem::path filePath = szProcessPath;
 
-    // Always use the owner window title, otherwise popup title would be used.
+    // Always use the owner window title, otherwise popup title would be
+    // displayed. Time-limited request: a slow/hung window must not stall the
+    // enumeration (the hotkeys and Alt+Tab handling run on this thread).
     const int bufferSize = 256;
     wchar_t windowTitle[bufferSize] = {};
-    GetWindowTextW(hOwner, windowTitle, bufferSize);
+    DWORD_PTR charsRead = 0;
+    SendMessageTimeoutW(
+        hOwner,
+        WM_GETTEXT,
+        bufferSize,
+        reinterpret_cast<LPARAM>(windowTitle),
+        SMTO_ABORTIFHUNG,
+        kWindowReplyTimeoutMs,
+        &charsRead);
 
     std::wstring title = windowTitle;
     if (IsHungAppWindow(hWnd)) {

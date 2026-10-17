@@ -37,6 +37,10 @@ constexpr int COL_ICON_WIDTH    = 36;
 constexpr int COL_PROCNAME_WIDTH = 180;
 constexpr int g_nIconSize       = 32;
 
+// Cap the wait when asking another window to close, so a slow application
+// cannot stall the AltTab UI thread.
+constexpr DWORD kCloseReplyTimeoutMs = 1000;
+
 #define FONT_POINT(hdc, p) (-MulDiv(p, GetDeviceCaps(hdc, LOGPIXELSY), 72))
 
 HFONT CreateFontEx(HDC hdc, const std::wstring& fontName, int fontSize, const std::wstring& fontStyle) {
@@ -629,15 +633,31 @@ void ATCloseWindow(const int index) {
     UpdateWindow(g_hListView);
     Sleep(50);
 
-    // SendMessage to a hung window would block the AltTab UI thread forever,
-    // so skip hung windows entirely.
+    // Sending SC_CLOSE to a slow/hung window must not block the AltTab UI
+    // thread; every request is time-limited (and hung windows are skipped).
     if (IsWindow(windowData.hWnd) && !IsHungAppWindowEx(windowData.hWnd)) {
-        SendMessageW(windowData.hWnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+        DWORD_PTR result = 0;
+        SendMessageTimeoutW(
+            windowData.hWnd,
+            WM_SYSCOMMAND,
+            SC_CLOSE,
+            0,
+            SMTO_ABORTIFHUNG,
+            kCloseReplyTimeoutMs,
+            &result);
     }
     Sleep(50);
 
     if (windowData.hOwner != windowData.hWnd && IsWindow(windowData.hOwner) && !IsHungAppWindowEx(windowData.hOwner)) {
-        SendMessageW(windowData.hOwner, WM_SYSCOMMAND, SC_CLOSE, 0);
+        DWORD_PTR result = 0;
+        SendMessageTimeoutW(
+            windowData.hOwner,
+            WM_SYSCOMMAND,
+            SC_CLOSE,
+            0,
+            SMTO_ABORTIFHUNG,
+            kCloseReplyTimeoutMs,
+            &result);
     }
 }
 
