@@ -2,42 +2,10 @@
 AltTab_0.1.0.0_x64.7z
 0.1.0.0 new features and bug fixes
 -------------------------------------
-+ Used edit control instead of static text control for search string. We can see
-  cue banner search text when the search string is empty.
-  > Displaying the tray context menu on search string edit control instead of 
-    default one.
-  > Default search string cue banner text can be changed from the settings.
+This is based on the August 2026 release (aka 2026.2.0) plus:
+- Search now includes the application description (in addition to process name and window title)
+- Fixed the 'revert to normal Windows alt-tab' behaviour when applications are slow to respond
+- Large refactor to create more manageable source code
+- Miscellaneous crashes
+- Tidied up the README :-)
 
-+ Added the below options to control Mouse Hover actions in settings dialog.
-  > Show ProcessInfo Tooltip
-  > Show Highlight Rectangle
-  > Show Delete Button
-
-+ Provided settings to configure highlight text and background colors from INI 
-  file.
-  Please add/edit the following lines under ListView section in INI file as
-  shown below:
-
-  [ListView]
-  HighlightTextColor=0xFF0000
-  HighlightBackgroundColor=0xFFFFBF
-
-  Note:
-  These settings are not available in Settings UI at present.
-  1. Please add the above params manually 
-  2. Go to settings dialog and update any setting to create the new settings
-     file.
-  After updating the highlight colors manually, please use
-  `Tray Icon -> Reload AltTabSettings.ini' menu to make use of the updated
-  settings in AltTab window.
-
-- Clear the process tooltip info while leaving the mouse from AltTab window.
-
-- Prevent closing AltTab window on pressing the Escape key when Context Menu
-  is visible in AltTab window.
-
-
-PS
---
-'+' : indicates new feature
-'-' : indicates bug fixed
