@@ -35,7 +35,7 @@ The code is split into focused modules (each has a matching `.h`):
 - Do not edit `source/version.h` by hand. Source of truth is `Scripts\VersionInfo.txt` (`MAJOR.MINOR.PATCH.BUILD`); regenerate via `python Scripts\CreateVersionH.py` (fills `Scripts\version.h.template`).
 - `VersionHelper.read_version_info()` returns `VersionInfo.txt` verbatim (no year rollover). Set the full `MAJOR.MINOR.PATCH.BUILD` there; bump what you want.
 - Version text is also mirrored to root `version.txt` and `ReleaseNotes.txt` (check-for-updates / changelog); keep them in sync.
-- Packaging: `python Scripts\CreatePackages.py` builds via `devenv` after sourcing a `vcvarsall`, hardcoded to the VS 2022 Professional path, and requires `pip install py7zr`. Outputs `Releases\AltTab_<ver>_<config>_x64.7z`.
+- Packaging: `python Scripts\CreatePackages.py` builds via root `compile.cmd` (so MSBuild/toolset are auto-detected, no hardcoded VS paths) and zips the redistributables (exe + `AltTab.chm`, `ReadMe.txt`, `ReleaseNotes.txt`) with Python's stdlib. Outputs `Releases\AltTab_<ver>_<config>_x64.zip`; `ReleaseNoLogger` also gets an extra `AltTab_<ver>_x64.zip` copy. Use `--skip-build` to only package existing binaries.
 
 ## Conventions & gotchas
 - Format with clang-format (`.clang-format`): 4-space indent, 120-col limit, compile-time-standard C++11, `PointerAlignment: Left`, braces on the same line, no tabs. Run `clang-format -i` on edited files.
