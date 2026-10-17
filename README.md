@@ -1,7 +1,8 @@
-![GitHub Downloads][gh-downloads]
-
 # AltTab
 AltTab is a small application created in C++, Win32, is an alternative for windows native task switcher (Alt+Tab / Alt+Shift+Tab). 
+
+The original author, Lokesh Govindu, decided to take it closed-source so this fork is based on a slightly older version that I have
+bug fixed mostly using AI. His closed-source version can be found [on Sourceforge](https://sourceforge.net/projects/alttab/)
 
 # Features
 * Find the right window faster (filter windows using search string), uses fuzzy string matching algorithm (no need to type the exact search string).
@@ -10,23 +11,17 @@ AltTab is a small application created in C++, Win32, is an alternative for windo
 Hide / Un-hide windows.
 * Provided configuration/setting INI file & UI to change font style, background color, window transparency, width and height.
 
-## SAST Tools
-
-[PVS-Studio](https://pvs-studio.com/en/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code.
-
 ## Screenshots
 ### AltTab main window
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/AltTab.gif)
+![](Screenshots/AltTab.gif)
 ### AltTab Settings
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/6.Settings.png)
+![](Screenshots/6.Settings.png)
 ### AltBacktick
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/7.AltBacktick.png)
+![](Screenshots/7.AltBacktick.png)
 ### AltBacktick with SimilarProcessGroups
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/8.SimilarProcessGroups.png)
+![](Screenshots/8.SimilarProcessGroups.png)
 ### ContextMenu
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/9.0.ContextMenu.png)
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/9.1.ContextMenu.png)
+![](Screenshots/9.0.ContextMenu.png)
+![](Screenshots/9.1.ContextMenu.png)
 ### TrayMenu
-![](https://github.com/lokeshgovindu/AltTab/blob/master/Screenshots/10.TrayMenu.png)
-
-[gh-downloads]: https://img.shields.io/github/downloads/lokeshgovindu/AltTab/total?color=pink&label=GitHub%20Downloads
+![](Screenshots/10.TrayMenu.png)
