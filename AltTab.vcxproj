@@ -213,12 +213,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="source\AltTab.cpp" />
+    <ClCompile Include="source\AltTabContextMenu.cpp" />
+    <ClCompile Include="source\AltTabListView.cpp" />
     <ClCompile Include="source\AltTabSettings.cpp" />
+    <ClCompile Include="source\AltTabTooltip.cpp" />
     <ClCompile Include="source\AltTabWindow.cpp" />
+    <ClCompile Include="source\AutoStart.cpp" />
     <ClCompile Include="source\CheckForUpdates.cpp" />
     <ClCompile Include="source\fuzzywuzzy.cpp" />
-    <ClCompile Include="source\GlobalData.cpp" />
     <ClCompile Include="source\Logger.cpp" />
+    <ClCompile Include="source\ProcessExplorer.cpp" />
+    <ClCompile Include="source\SettingsDialog.cpp" />
     <ClCompile Include="source\Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -234,14 +239,20 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\AltTab.h" />
+    <ClInclude Include="source\AltTabContextMenu.h" />
+    <ClInclude Include="source\AltTabListView.h" />
     <ClInclude Include="source\AltTabSettings.h" />
+    <ClInclude Include="source\AltTabTooltip.h" />
     <ClInclude Include="source\AltTabWindow.h" />
+    <ClInclude Include="source\AutoStart.h" />
     <ClInclude Include="source\CheckForUpdates.h" />
     <ClInclude Include="source\fuzzywuzzy.h" />
     <ClInclude Include="source\GlobalData.h" />
     <ClInclude Include="source\Logger.h" />
     <ClInclude Include="source\PreCompile.h" />
+    <ClInclude Include="source\ProcessExplorer.h" />
     <ClInclude Include="source\resource.h" />
+    <ClInclude Include="source\SettingsDialog.h" />
     <ClInclude Include="source\targetver.h" />
     <ClInclude Include="source\Tooltips.h" />
     <ClInclude Include="source\Utils.h" />

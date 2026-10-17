@@ -34,8 +34,8 @@ using StringList           = std::vector<std::wstring>;
 #define DEFAULT_LV_FONT_STYLE                L"normal"               // normal, italic, bold and bold italic
 #define DEFAULT_LV_FONT_COLOR                0xFFFFFF                // RGB(0xFF, 0xFF, 0xFF) White text
 #define DEFAULT_LV_BG_COLOR                  0x000000                // RGB(0x00, 0x00, 0x00) Black background
-#define DEFAULT_LV_HIGHLIGHT_TEXT_COLOR      0xFF0000                // RGB(0xFF, 0x00, 0x00) Red text for highlighted part
-#define DEFAULT_LV_HIGHLIGHT_BG_COLOR        0xFFFFBF                // RGB(0xFF, 0xFF, 0xBF) Yellow background for match
+#define DEFAULT_LV_HIGHLIGHT_TEXT_COLOR      0xFF0000                // RGB(0xFF, 0x00, 0x00) Red text for highlight
+#define DEFAULT_LV_HIGHLIGHT_BG_COLOR        0xFFFFBF                // RGB(0xFF, 0xFF, 0xBF) Yellow background
 #define DEFAULT_WIDTH                        45
 #define DEFAULT_HEIGHT                       45
 #define DEFAULT_FUZZYMATCHPERCENT            60
@@ -55,16 +55,12 @@ using StringList           = std::vector<std::wstring>;
 
 /*!
  * \brief AltTab application settings
- * 
- * SimilarProcessGroups is a string, ProcessList are separated by | and processes are separated by /. 
- * Example:
- *    "notepad.exe/notepad++.exe|iexplore.exe/chrome.exe/firefox.exe|
- *     explorer.exe/xplorer2_lite.exe/xplorer2.exe/xplorer2_64.exe|
- *     cmd.exe/conemu.exe/conemu64.exe"
- * 
- * ProcessExclusions is a string, Process names are separated by /.
- * Example:
- *    "outlook.exe/teams.exe"
+ *
+ * SimilarProcessGroups: process names separated by '/', groups separated by '|'.
+ *    e.g. "notepad.exe/notepad++.exe|iexplore.exe/chrome.exe/firefox.exe"
+ *
+ * ProcessExclusions: process names separated by '/'.
+ *    e.g. "outlook.exe/teams.exe"
  */
 struct AltTabSettings {
     // ----------------------------------------------------------------------------
@@ -73,7 +69,7 @@ struct AltTabSettings {
     bool                   HKAltTabEnabled;            // Alt+Tab enabled
     bool                   HKAltBacktickEnabled;       // Alt+Backtick enabled
     bool                   HKAltCtrlTabEnabled;        // Alt+Ctrl+Tab enabled
-    WPARAM                 HKBacktickKey;              // What key is the 'backtick' key
+    WPARAM                 HKBacktickKey;              // Virtual key code of the 'backtick' key
     // ----------------------------------------------------------------------------
     // SearchString Font Name, Size, Style, Color and Background Color
     // ----------------------------------------------------------------------------
@@ -98,12 +94,12 @@ struct AltTabSettings {
     // ----------------------------------------------------------------------------
     int                    WidthPercentage;            // Window width in percentage of the actual screen width
     int                    HeightPercentage;           // Window height in percentage of the actual screen height
-    int                    WindowWidth;                // Window width, will be calculated at runtime
-    int                    WindowHeight;               // Window height, will be calculated at runtime
+    int                    WindowWidth;                // Window width, calculated at runtime
+    int                    WindowHeight;               // Window height, calculated at runtime
     int                    FuzzyMatchPercent;          // Fuzzy match percent
     int                    Transparency;               // Window transparency
     std::wstring           SimilarProcessGroups;       // Similar process groups
-    ProcessGroupsList      ProcessGroupsList;          // Process groups, will be constructed at runtime from SimilarProcessGroups
+    ProcessGroupsList      ProcessGroupsList;          // Process groups, built at runtime from SimilarProcessGroups
     std::wstring           CheckForUpdatesOpt;         // Check for updates
     bool                   PromptTerminateAll;         // Ask before terminating all processes
     bool                   ShowSearchString;           // Show search string
@@ -121,7 +117,7 @@ struct AltTabSettings {
     // ----------------------------------------------------------------------------
     bool                   ProcessExclusionsEnabled;   // Process exclusions enabled
     std::wstring           ProcessExclusions;          // Process exclusions string which are separated by /
-    ProcessExclusionList   ProcessExclusionList;       // Process exclusions list, will be constructed at runtime from ProcessExclusions
+    ProcessExclusionList   ProcessExclusionList;       // Process exclusions list, built at runtime
     // ----------------------------------------------------------------------------
     // Other Settings
     // ----------------------------------------------------------------------------
@@ -130,9 +126,7 @@ struct AltTabSettings {
     AltTabSettings();
 
     void Reset();
-
     void Load();
-
     void Save();
 
     int GetCheckForUpdatesIndex() const;
@@ -141,33 +135,32 @@ struct AltTabSettings {
     static StringList      CheckForUpdatesOptions;
 };
 
-INT_PTR CALLBACK ATSettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+/*!
+ * \brief Convert a COLORREF to a "0xRRGGBB" string.
+ */
+std::wstring ColorRefToRGBString(COLORREF colorRef);
+
+/*!
+ * \brief Build a COLORREF from an integer (0xRRGGBB).
+ */
+COLORREF RGBIntToColorRef(int hexValue);
 
 int  GetProcessGroupIndex(const std::wstring& processName);
 
 /*!
- * Check if the processName is similar process of ProcessGroup[i]
- * 
- * \param[in]   index           Source process index
- * \param[in]   processName     Process name to check if it is available in ProcessGroup[i]
- * 
- * \returns true if the processName is of ProcessGroup[i] otherwise false.
+ * \brief Whether processName is part of the "similar process" group index.
  */
 bool IsSimilarProcess(int index, const std::wstring& processName);
 
 bool IsSimilarProcess(const std::wstring& processNameA, const std::wstring& processNameB);
 
 /*!
- * \brief AltTab settings directory path
- * 
- * \return AltTab settings directory path
+ * \brief AltTab local AppData directory (used for logs / update timestamp).
  */
 std::wstring ATLocalAppDataDirPath();
 
 /*!
- * \brief Application directory path where AltTab.exe is running.
- * 
- * \returns Application directory path where AltTab.exe is running.
+ * \brief Application directory where AltTab.exe is running.
  */
 std::wstring ATApplicationDirPath();
 
@@ -176,23 +169,11 @@ std::wstring ATSettingsFilePath(bool overwrite = false);
 void ATSettingsToFile(const std::wstring& settingsFilePath);
 
 /*!
- * Load settings from AltTabSettings.ini file to application
+ * \brief Load settings from AltTabSettings.ini into g_Settings.
  */
 void ATLoadSettings();
 
 /*!
- * Save application settings to AltTabSettings.ini file
+ * \brief Save g_Settings to AltTabSettings.ini.
  */
 void ATSaveSettings();
-
-/*!
- * Save modified settings to AltTabSettings.ini file
- */
-void ATApplySettings(HWND hDlg);
-
-/*!
- * Check if settings are modified
- * 
- * \returns true if settings are modified otherwise false.
- */
-bool AreSettingsModified(HWND hDlg);

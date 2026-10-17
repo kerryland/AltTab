@@ -18,25 +18,40 @@
     <ClCompile Include="source\AltTab.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\AltTabContextMenu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\AltTabListView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\AltTabSettings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\AltTabTooltip.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="source\AltTabWindow.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\Logger.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="source\Utils.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="source\fuzzywuzzy.cpp">
+    <ClCompile Include="source\AutoStart.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="source\CheckForUpdates.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\GlobalData.cpp">
+    <ClCompile Include="source\fuzzywuzzy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Logger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\ProcessExplorer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\SettingsDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -54,40 +69,58 @@
     <ClInclude Include="source\AltTab.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="source\AltTabContextMenu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\AltTabListView.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="source\AltTabSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\AltTabTooltip.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="source\AltTabWindow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="source\AutoStart.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\CheckForUpdates.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\fuzzywuzzy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\GlobalData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="source\Logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\PreCompile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\ProcessExplorer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="source\resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="source\SettingsDialog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="source\targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Tooltips.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="source\Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="source\version.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="source\GlobalData.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="source\Tooltips.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="source\fuzzywuzzy.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="source\CheckForUpdates.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="source\PreCompile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
