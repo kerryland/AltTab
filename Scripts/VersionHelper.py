@@ -10,9 +10,9 @@ def read_version_info():
         version = f.read().strip()
 
     version_parts = version.split('.')
-    if len(version_parts) != 4:
+    if len(version_parts) != 3:
         # If version format is incorrect, reset to default
-        version_parts = ["0", "0", "0", "0"]
+        version_parts = ["0", "0", "0"]
 
     return version_parts
 
@@ -30,8 +30,8 @@ def update_version_info():
     version_parts = read_version_info()
     current_version = get_current_version()
     print(f"Current version: {current_version}")
-    version_parts[3] = str(int(version_parts[3]) + 1)  # Increment build number
-    new_version = f"{version_parts[0]}.{version_parts[1]}.{version_parts[2]}.{version_parts[3]}"
+    version_parts[2] = str(int(version_parts[2]) + 1)  # Increment patch number
+    new_version = f"{version_parts[0]}.{version_parts[1]}.{version_parts[2]}"
     print(f"New version: {new_version}")
 
     with open(VERSION_INFO_TXT, "w") as f:

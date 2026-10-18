@@ -40,21 +40,21 @@ def exe_for(config):
 
 # The update checker (CheckForUpdates.cpp) only recognizes GitHub release tags
 # in this exact form, so a mismatch would silently break in-app update checks.
-TAG_VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\.\d+$")
+TAG_VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+$")
 
 
 def verify_version_format():
     """Fail packaging if Scripts\\VersionInfo.txt isn't a valid update-checker tag.
 
     Reads the raw file (not VersionHelper.get_current_version()) because
-    read_version_info() silently normalizes malformed input to 0.0.0.0, which
+    read_version_info() silently normalizes malformed input to 0.0.0, which
     would hide an invalid tag shape from this check.
     """
     raw_version = VersionHelper.VERSION_INFO_TXT.read_text().strip()
     if not TAG_VERSION_PATTERN.fullmatch(raw_version):
         print(
             f"[ERROR] Version '{raw_version}' is not a valid release tag for the update checker.\n"
-            "  GitHub release tags must be exactly NNNN.N.N.N (e.g. 2024.4.0.2)\n"
+            "  GitHub release tags must be exactly NNN.N (e.g. 1.2.3)\n"
             "  so that CheckForUpdates.cpp's IsValidVersion() accepts them.\n"
             "  Fix Scripts/VersionInfo.txt and re-run.",
             file=sys.stderr,

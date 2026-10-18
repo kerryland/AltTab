@@ -124,9 +124,9 @@ void CheckForUpdates(const bool quiteMode) {
     AT_LOG_INFO("Current Version: %s", currentVersion.c_str());
     AT_LOG_INFO("Update Version : %s", updateVersion.c_str());
 
-    // Versions look like "NNNN.N.N.N" (year.major.minor.build).
+    // Versions look like "N.N.N" (major.minor.patch).
     const auto IsValidVersion = [](const std::string& version) {
-        return std::regex_match(version, std::regex(R"(\d+\.\d+\.\d+\.\d+)"));
+        return std::regex_match(version, std::regex(R"(\d+\.\d+\.\d+)"));
     };
 
     if (updateVersion.empty() || !IsValidVersion(updateVersion)) {

@@ -32,17 +32,17 @@ The code is split into focused modules (each has a matching `.h`):
 - At runtime `CreateLogger()` (`source/Logger.cpp`) hardcodes appenders; the committed root `log4cpp-config.properties` is NOT loaded yet (open task in `Tasks.md`). Release logs to `%LOCALAPPDATA%\AltTab\AltTab.log`; Debug logs to a console via `EnableConsoleWindow()`.
 
 ## Versioning — `source/version.h` is GENERATED
-- Do not edit `source/version.h` by hand. Source of truth is `Scripts\VersionInfo.txt` (`MAJOR.MINOR.PATCH.BUILD`); regenerate via `python Scripts\CreateVersionH.py` (fills `Scripts\version.h.template`).
-- `VersionHelper.read_version_info()` returns `VersionInfo.txt` verbatim (no year rollover). Set the full `MAJOR.MINOR.PATCH.BUILD` there; bump what you want.
+- Do not edit `source/version.h` by hand. Source of truth is `Scripts\VersionInfo.txt` (`MAJOR.MINOR.PATCH`); regenerate via `python Scripts\CreateVersionH.py` (fills `Scripts\version.h.template`).
+- `VersionHelper.read_version_info()` returns `VersionInfo.txt` verbatim. Set the full `MAJOR.MINOR.PATCH` there; bump what you want.
 - Version text is also mirrored to root `version.txt` and `ReleaseNotes.txt` (check-for-updates / changelog); keep them in sync.
-- Packaging: `python Scripts\CreatePackages.py` builds via root `compile.cmd` (so MSBuild/toolset are auto-detected, no hardcoded VS paths) and zips the redistributables (exe + `AltTab.chm`, `ReadMe.txt`, `ReleaseNotes.txt`) with Python's stdlib. Outputs `Releases\AltTab_<ver>_<config>_x64.zip`; `ReleaseNoLogger` also gets an extra `AltTab_<ver>_x64.zip` copy. Use `--skip-build` to only package existing binaries. It refuses to package unless `Scripts\VersionInfo.txt` is `NNNN.N.N.N` (the update checker's release-tag format).
+- Packaging: `python Scripts\CreatePackages.py` builds via root `compile.cmd` (so MSBuild/toolset are auto-detected, no hardcoded VS paths) and zips the redistributables (exe + `AltTab.chm`, `ReadMe.txt`, `ReleaseNotes.txt`) with Python's stdlib. Outputs `Releases\AltTab_<ver>_<config>_x64.zip`; `ReleaseNoLogger` also gets an extra `AltTab_<ver>_x64.zip` copy. Use `--skip-build` to only package existing binaries. It refuses to package unless `Scripts\VersionInfo.txt` is `N.N.N` (the update checker's release-tag format).
 
 ## Release checklist
-1. Bump `Scripts\VersionInfo.txt` (source of truth for `MAJOR.MINOR.PATCH.BUILD`); nothing writes it automatically.
+1. Bump `Scripts\VersionInfo.txt` (source of truth for `MAJOR.MINOR.PATCH`); nothing writes it automatically.
 2. `python Scripts\CreateVersionH.py` regenerates `source/version.h`.
 3. Manually update root `version.txt` and append to `ReleaseNotes.txt` — no script does this (easy to forget; keep them in sync).
 4. `python Scripts\CreatePackages.py` builds + zips (verifies the tag format itself).
-5. Commit, then `git tag <NNNN.N.N.N>` matching `VersionInfo.txt` exactly, and push the tag.
+5. Commit, then `git tag <N.N.N>` matching `VersionInfo.txt` exactly, and push the tag.
 6. Create a GitHub release at `github.com/kerryland/AltTab/releases` on that tag, upload the zips, and write the changelog — its **body** is what AltTab shows in the update dialog, and the **tag name** is what the in-app update check compares against. Wrong tag shape ⇒ update check silently finds nothing.
 
 ## Conventions & gotchas
