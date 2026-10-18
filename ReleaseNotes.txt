@@ -12,15 +12,19 @@ Known Issues
 ------------
 - Available @ https://github.com/kerryland/AltTab/issues
 
+0.1.1.0 new features and bug fixes
+-------------------------------------
++ 'Check for updates' now looks at my github fork
+
 
 0.1.0.0 new features and bug fixes
 -------------------------------------
 This is based on the August 2026 release (aka 2026.2.0) plus:
-- Search now includes the application description (in addition to process name and window title)
-- Fixed the 'revert to normal Windows alt-tab' behaviour when applications are slow to respond
-- Large refactor to create more manageable source code
-- Miscellaneous crashes
-- Tidied up the README :-)
++ Search now includes the application description (in addition to process name and window title)
++ Fixed the 'revert to normal Windows alt-tab' behaviour when applications are slow to respond
++ Large refactor to create more manageable source code
++ Miscellaneous crashes
++ Tidied up the README :-)
 
 
 2026.1.0.0 new features and bug fixes

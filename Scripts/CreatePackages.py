@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -35,6 +36,31 @@ PACKAGE_FILES = ["AltTab.chm", "ReadMe.txt", "ReleaseNotes.txt"]
 
 def exe_for(config):
     return X64_DIR / config / "AltTab.exe"
+
+
+# The update checker (CheckForUpdates.cpp) only recognizes GitHub release tags
+# in this exact form, so a mismatch would silently break in-app update checks.
+TAG_VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+\.\d+$")
+
+
+def verify_version_format():
+    """Fail packaging if Scripts\\VersionInfo.txt isn't a valid update-checker tag.
+
+    Reads the raw file (not VersionHelper.get_current_version()) because
+    read_version_info() silently normalizes malformed input to 0.0.0.0, which
+    would hide an invalid tag shape from this check.
+    """
+    raw_version = VersionHelper.VERSION_INFO_TXT.read_text().strip()
+    if not TAG_VERSION_PATTERN.fullmatch(raw_version):
+        print(
+            f"[ERROR] Version '{raw_version}' is not a valid release tag for the update checker.\n"
+            "  GitHub release tags must be exactly NNNN.N.N.N (e.g. 2024.4.0.2)\n"
+            "  so that CheckForUpdates.cpp's IsValidVersion() accepts them.\n"
+            "  Fix Scripts/VersionInfo.txt and re-run.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return raw_version
 
 
 def intermediate_dir_for(config):
@@ -89,7 +115,7 @@ def create_zip(output_filename, files_to_pack):
 
 def create_package(config):
     """Zip one configuration's redistribution files into Releases\\."""
-    version = VersionHelper.get_current_version()
+    version = verify_version_format()
     config_label = "ReleaseLogger" if config == "Release" else config
     output_filename = RELEASES_DIR / f"AltTab_{version}_{config_label}_x64.zip"
 
@@ -165,7 +191,8 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
 
-    print(f"Current Version: {VersionHelper.get_current_version()}\n")
+    version = verify_version_format()
+    print(f"Current Version: {version}\n")
 
     if args.update_version:
         VersionHelper.update_version_info()

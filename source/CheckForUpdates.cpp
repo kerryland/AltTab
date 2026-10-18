@@ -59,7 +59,7 @@ void CheckForUpdates(const bool quiteMode) {
         return;
     }
 
-    // Only the update file URL is a version.txt download; keep the original URL for the changelog.
+    // GitHub's "latest release" API responds with JSON (tag_name + body).
     HINTERNET hConnect = InternetOpenUrl(hInternet, AT_UPDATE_FILE_URL, nullptr, 0, INTERNET_FLAG_RELOAD, 0);
     if (!hConnect) {
         AT_LOG_ERROR("Error opening URL with WinINet");
@@ -88,19 +88,37 @@ void CheckForUpdates(const bool quiteMode) {
         return;
     }
 
-    // Parse: line1 = version, line2 = installer name, rest = changelog.
-    const auto remainingLines = Split(contents, "\n");
-    if (remainingLines.size() < 2) {
-        AT_LOG_ERROR("Update file is malformed.");
-        return;
-    }
-
     const std::string currentVersion = AT_VERSION_TEXT;
-    const std::string updateVersion  = Trim(remainingLines[0]);
+    const std::string originalContents = contents;
 
+    // GitHub API: tag_name = version, body = changelog.
+    std::smatch match;
+    std::regex tagRegex(R"tag("tag_name"\s*:\s*"([^"]+)")tag");
+    std::regex bodyRegex(R"body("body"\s*:\s*"((?:[^"\\]|\\.)*)")body");
+
+    std::string updateVersion;
     std::string latestChanges;
-    for (size_t i = 2; i < remainingLines.size(); ++i) {
-        latestChanges += remainingLines[i] + "\n";
+    if (std::regex_search(originalContents, match, tagRegex)) {
+        updateVersion = Trim(match[1].str());
+    }
+    if (std::regex_search(originalContents, match, bodyRegex)) {
+        latestChanges = match[1].str();
+        std::string unescaped;
+        unescaped.reserve(latestChanges.size());
+        for (size_t i = 0; i < latestChanges.size(); ++i) {
+            if (latestChanges[i] == '\\' && i + 1 < latestChanges.size()) {
+                const char c = latestChanges[++i];
+                switch (c) {
+                case 'n': unescaped += '\n'; break;
+                case 'r': unescaped += '\r'; break;
+                case 't': unescaped += '\t'; break;
+                default:  unescaped += c;    break;
+                }
+            } else {
+                unescaped += latestChanges[i];
+            }
+        }
+        latestChanges = unescaped;
     }
 
     AT_LOG_INFO("Current Version: %s", currentVersion.c_str());
@@ -111,7 +129,7 @@ void CheckForUpdates(const bool quiteMode) {
         return std::regex_match(version, std::regex(R"(\d+\.\d+\.\d+\.\d+)"));
     };
 
-    if (!IsValidVersion(updateVersion)) {
+    if (updateVersion.empty() || !IsValidVersion(updateVersion)) {
         AT_LOG_ERROR("Invalid update version: %s, please check again!", updateVersion.c_str());
         if (!quiteMode) {
             const std::string info = std::format("Invalid update version: {}", updateVersion);

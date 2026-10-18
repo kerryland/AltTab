@@ -9,8 +9,8 @@
 #define ATSTR(x)                 ATSTR_(x)
 
 #define AT_PRODUCT_PAGE 	      L"https://alttab.sourceforge.io/"
-#define AT_PRODUCT_LATEST_URL    L"https://sourceforge.net/projects/alttab/files/latest/download"
-#define AT_UPDATE_FILE_URL       L"https://sourceforge.net/projects/alttab/files/version.txt/download"
+#define AT_PRODUCT_LATEST_URL    L"https://github.com/kerryland/AltTab/releases/latest"
+#define AT_UPDATE_FILE_URL       L"https://api.github.com/repos/kerryland/AltTab/releases/latest"
 #define AT_AUTHOR_NAME 		      L"Lokesh Govindu"
 #define AT_AUTHOR_PAGE 		      L"https://github.com/lokeshgovindu"
 #define AT_AUTHOR_EMAIL          L"lokeshgovindu@gmail.com"

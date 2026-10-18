@@ -1,11 +1,3 @@
-0.1.0.0
-AltTab_0.1.0.0_x64.7z
-0.1.0.0 new features and bug fixes
+0.1.1.0
 -------------------------------------
-This is based on the August 2026 release (aka 2026.2.0) plus:
-- Search now includes the application description (in addition to process name and window title)
-- Fixed the 'revert to normal Windows alt-tab' behaviour when applications are slow to respond
-- Large refactor to create more manageable source code
-- Miscellaneous crashes
-- Tidied up the README :-)
-
+- 'Check for updates' now looks at my github fork
