@@ -104,6 +104,28 @@ bool IsDesktopHostWindow(HWND hWnd) {
     return wcscmp(className, L"Progman") == 0 || wcscmp(className, L"WorkerW") == 0;
 }
 
+std::wstring GetProcessNameFromWindow(HWND hWnd) {
+    DWORD processId = 0;
+    GetWindowThreadProcessId(hWnd, &processId);
+    if (processId == 0) {
+        return {};
+    }
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (hProcess == nullptr) {
+        return {};
+    }
+
+    wchar_t szProcessPath[MAX_PATH] = {};
+    const DWORD size = GetModuleFileNameExW(hProcess, nullptr, szProcessPath, MAX_PATH);
+    CloseHandle(hProcess);
+    if (size == 0) {
+        return {};
+    }
+
+    return std::filesystem::path(szProcessPath).filename().wstring();
+}
+
 bool IsNonSwitchableShellWindow(HWND hWnd, const std::wstring& title) {
     // UWP/shell composition roots that are not real switchable windows:
     //   - Windows.UI.Core.CoreWindow is the XAML composition surface of a UWP
@@ -300,15 +322,16 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
     if (g_IsAltTab || g_IsAltCtrlTab) {
         insert = !excluded;
     }
-    // Alt+Backtick: only windows of the same process/binaries group.
+    // Alt+Backtick: only windows similar to the one focused when the hotkey
+    // was pressed (captured by ShowAltTabWindow before the switcher takes the
+    // foreground).
     else if (g_IsAltBacktick) {
-        if (g_AltBacktickWndInfo.hWnd == nullptr) {
-            if (!(GetWindowLong(item.hWnd, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
-                g_AltBacktickWndInfo = item;
-            }
-        }
-        if (g_AltBacktickWndInfo.hWnd != nullptr) {
+        if (g_AltBacktickWndInfo.hWnd != nullptr && !g_AltBacktickWndInfo.ProcessName.empty()) {
             insert = IsSimilarProcess(g_AltBacktickWndInfo.ProcessName, item.ProcessName);
+        } else {
+            // No usable foreground reference (e.g. the shell desktop is focused);
+            // fall back to listing every window rather than an empty list.
+            insert = !excluded;
         }
     }
 

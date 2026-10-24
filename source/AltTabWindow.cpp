@@ -105,6 +105,23 @@ HWND ShowAltTabWindow(HWND& hAltTabWnd, int direction) {
             }
         }
 
+        // Alt+Backtick must switch among the windows similar to the one that
+        // was focused when the hotkey was pressed. Capture it here, before the
+        // AltTab window steals the foreground, so the enumeration below filters
+        // on it instead of whichever window EnumWindows happens to see first.
+        if (g_IsAltBacktick) {
+            AltTabWindowData src = {};
+            if (hForegroundWnd != nullptr) {
+                src.hWnd        = hForegroundWnd;
+                src.ProcessName = GetProcessNameFromWindow(hForegroundWnd);
+            }
+            AT_LOG_INFO(
+                "Alt+Backtick source window: %#x, process: [%ls]",
+                src.hWnd,
+                src.ProcessName.c_str());
+            g_AltBacktickWndInfo = src;
+        }
+
         hAltTabWnd = CreateAltTabWindow();
         SetForegroundWindow(hAltTabWnd);
     }
@@ -332,6 +349,7 @@ void DestroyAltTabWindow(const bool activate) {
     g_IsAltCtrlTab           = false;
     g_IsAltBacktick          = false;
     g_SelectedIndex          = -1;
+    g_AltBacktickWndInfo     = {};   // re-captured on the next Alt+Backtick
     g_hAltTabIsBeingClosed   = false;
 }
 

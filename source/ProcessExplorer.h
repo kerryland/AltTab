@@ -34,6 +34,11 @@ bool IsAltTabWindow(HWND hWnd);
  */
 bool IsInvisibleWin10BackgroundAppWindow(HWND hWnd);
 
+/*!
+ * \brief Get the process file name (e.g. "brave.exe") that owns the window.
+ */
+std::wstring GetProcessNameFromWindow(HWND hWnd);
+
 namespace AT {
     /*!
      * \brief Read version info (description, version, company) from a PE file.
