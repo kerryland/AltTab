@@ -161,6 +161,12 @@ INT_PTR CALLBACK AltTabWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         HANDLE_MSG(hWnd, WM_SYSCOMMAND    , ATW_OnSysCommand    );
         HANDLE_MSG(hWnd, WM_TIMER         , ATW_OnTimer         );
 
+        case WM_SYSCHAR:
+            // Don't let DefWindowProc play the menu beep for Alt+key combos
+            // that reach us (e.g. an Alt+Backtick repeat a hook sample missed);
+            // the AltTab window owns all keys while it is open.
+            return 0;
+
         default:
             return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }

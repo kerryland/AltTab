@@ -384,6 +384,15 @@ LRESULT CALLBACK ListViewSubclassProc(
         }
     } break;
 
+    case WM_CHAR: {
+        // The main loop runs TranslateMessage over every message, so the
+        // synthetic WM_KEYDOWN the low-level hook posts for the backtick key
+        // gets turned into a WM_CHAR aimed at the ListView. The ListView never
+        // accepts real typed characters (the search edit does), and letting it
+        // reach the control's default processing plays the alert beep.
+        return 0;
+    } break;
+
     case WM_MOUSEMOVE: {
         TRACKMOUSEEVENT tme;
         tme.cbSize    = sizeof(tme);
