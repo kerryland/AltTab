@@ -93,13 +93,53 @@ HWND GetOwnerWindowHwnd(HWND hWnd) {
     return hOwner ? hOwner : hWnd;
 }
 
+bool IsDesktopHostWindow(HWND hWnd) {
+    // The "desktop" is a real, visible top-level window owned by explorer.exe
+    // (Progman / WorkerW). There is no user window behind it to activate, so it
+    // must never be listed as an Alt+Tab candidate.
+    wchar_t className[64] = {};
+    if (GetClassNameW(hWnd, className, _countof(className)) == 0) {
+        return false;
+    }
+    return wcscmp(className, L"Progman") == 0 || wcscmp(className, L"WorkerW") == 0;
+}
+
+bool IsNonSwitchableShellWindow(HWND hWnd, const std::wstring& title) {
+    // UWP/shell composition roots that are not real switchable windows:
+    //   - Windows.UI.Core.CoreWindow is the XAML composition surface of a UWP
+    //     app; the user-facing window is its ApplicationFrameWindow sibling.
+    //   - ApplicationFrameWindow is a window frame. Real frames carry the app
+    //     title; an empty-title one is a hidden/unused reuse frame.
+    // Only the empty-title instances are proxies (e.g. Settings' CoreWindow,
+    // Explorer's hidden frame) so real, titled windows are kept.
+    if (!title.empty()) {
+        return false;
+    }
+    wchar_t className[64] = {};
+    if (GetClassNameW(hWnd, className, _countof(className)) == 0) {
+        return false;
+    }
+    return wcscmp(className, L"Windows.UI.Core.CoreWindow") == 0
+        || wcscmp(className, L"ApplicationFrameWindow") == 0;
+}
+
 bool IsAltTabWindow(HWND hWnd) {
     if (!IsWindowVisible(hWnd))
+        return false;
+
+    if (IsDesktopHostWindow(hWnd))
         return false;
 
     HWND hOwner = GetOwnerWindowHwnd(hWnd);
     if (GetLastActivePopup(hOwner) != hWnd)
         return false;
+
+    DWORD windowES = GetWindowLong(hWnd, GWL_EXSTYLE);
+    if (windowES & WS_EX_NOACTIVATE) {
+        // Cannot be activated (used by proxy/compositor frames of shell apps);
+        // selecting such a window would appear to do nothing.
+        return false;
+    }
 
     DWORD ownerES = GetWindowLong(hOwner, GWL_EXSTYLE);
     if (ownerES && IsWindowVisible(hOwner) && !((ownerES & WS_EX_TOOLWINDOW) && !(ownerES & WS_EX_APPWINDOW))
@@ -107,7 +147,6 @@ bool IsAltTabWindow(HWND hWnd) {
         return true;
     }
 
-    DWORD windowES = GetWindowLong(hWnd, GWL_EXSTYLE);
     if (windowES && !((windowES & WS_EX_TOOLWINDOW) && !(windowES & WS_EX_APPWINDOW))
         && !IsInvisibleWin10BackgroundAppWindow(hWnd)) {
         return true;
@@ -207,8 +246,30 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
         &charsRead);
 
     std::wstring title = windowTitle;
+    if (title.empty()) {
+        // The owner chain may lead to a caption-less proxy frame; prefer the
+        // window's own text before giving up on a user-facing label.
+        wchar_t ownTitle[bufferSize] = {};
+        charsRead = 0;
+        SendMessageTimeoutW(
+            hWnd,
+            WM_GETTEXT,
+            bufferSize,
+            reinterpret_cast<LPARAM>(ownTitle),
+            SMTO_ABORTIFHUNG,
+            kWindowReplyTimeoutMs,
+            &charsRead);
+        title = ownTitle;
+    }
     if (IsHungAppWindow(hWnd)) {
         title += L" (Not Responding)";
+    }
+
+    // Skip shell composition proxies (e.g. Settings' empty CoreWindow or
+    // Explorer's hidden ApplicationFrameWindow): there is no user window to
+    // bring forward behind them.
+    if (IsNonSwitchableShellWindow(hWnd, title)) {
+        return TRUE;
     }
 
     AltTabWindowData item;
@@ -223,6 +284,13 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
     item.IsBeingClosed     = false;
 
     AT::GetPEInfo(item.FullPath, item.Description, item.Version, item.CompanyName);
+
+    if (item.Title.empty()) {
+        // Shell/compositor frames (some Explorer/Settings proxy windows) don't
+        // expose a caption through WM_GETTEXT; show the PE file description or
+        // the process name so the row is never blank.
+        item.Title = item.Description.empty() ? item.ProcessName : item.Description;
+    }
 
     auto* vItems = reinterpret_cast<std::vector<AltTabWindowData>*>(lParam);
     bool insert = true;
