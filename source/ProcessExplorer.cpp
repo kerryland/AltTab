@@ -80,9 +80,15 @@ namespace AT {
 } // namespace AT
 
 bool IsInvisibleWin10BackgroundAppWindow(HWND hWnd) {
+    // Windows marks windows it does not want switchable (shell input surfaces,
+    // minimized UWP background apps, the taskbar/start etc.) as DWM-cloaked.
+    // DWMWA_CLOAKED is a flag set: DWM_CLOAKED_APP (1), DWM_CLOAKED_SHELL (2),
+    // DWM_CLOAKED_INHERITED (4) -- any non-zero value means not switchable.
+    // This is the same attribute the native Alt+Tab / taskbar prune on, and is
+    // what keeps e.g. the "Text Input Application" (TextInputHost) out.
     BOOL isCloaked = FALSE;
     DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &isCloaked, sizeof(isCloaked));
-    return isCloaked == TRUE;
+    return isCloaked != 0;
 }
 
 HWND GetOwnerWindowHwnd(HWND hWnd) {
