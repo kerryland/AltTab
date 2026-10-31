@@ -319,6 +319,13 @@ LRESULT CALLBACK LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
     const bool windowVisible = (g_hAltTabWnd != nullptr);
 
+    // While the settings dialog is open, don't hijack Alt+Tab: pass it through
+    // to the shell's own switcher so the user can return to the settings page
+    // (it has a taskbar button via WS_EX_APPWINDOW) instead of being trapped.
+    if (g_hSettingsWnd != nullptr) {
+        return CallNextHookEx(g_KeyboardHook, nCode, wParam, lParam);
+    }
+
     // Handle keys while the Alt key is down (Alt+Tab / Alt+Ctrl+Tab) or while
     // the AltTab window is visible (stick mode, e.g. Alt+Ctrl+Tab).
     if ((altKeyDown && (vkCode != VK_CONTROL && (!isCtrlPressed || g_Settings.HKAltCtrlTabEnabled))) || windowVisible) {
