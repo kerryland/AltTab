@@ -220,18 +220,29 @@ HICON GetWindowIcon(HWND hWnd) {
 
 namespace {
 
-bool IsExcludedProcess(const std::wstring& processName) {
-    if (!g_Settings.ProcessExclusionsEnabled) {
+bool IsExcludedProcess(const AltTabEnumContext& context, const std::wstring& processName) {
+    if (!context.ProcessExclusionsEnabled) {
         return false;
     }
     return std::find(
-               g_Settings.ProcessExclusionList.begin(),
-               g_Settings.ProcessExclusionList.end(),
+               context.ProcessExclusionList.begin(),
+               context.ProcessExclusionList.end(),
                processName)
-           != g_Settings.ProcessExclusionList.end();
+           != context.ProcessExclusionList.end();
 }
 
+// Carries the output vector and the immutable state snapshot into the
+// enumerator so the enumeration never reads globals and can safely run on a
+// worker thread.
+struct EnumPack {
+    std::vector<AltTabWindowData>* items;
+    const AltTabEnumContext*       context;
+};
+
 BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
+    auto* pack = reinterpret_cast<EnumPack*>(lParam);
+    const AltTabEnumContext& ctx = *pack->context;
+
     if (!IsAltTabWindow(hWnd)) {
         return TRUE;
     }
@@ -260,7 +271,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
     // Always use the owner window title, otherwise popup title would be
     // displayed. Time-limited request: a slow/hung window must not stall the
-    // enumeration (the hotkeys and Alt+Tab handling run on this thread).
+    // enumeration (it runs on a worker thread, never on the hook thread).
     const int bufferSize = 256;
     wchar_t windowTitle[bufferSize] = {};
     DWORD_PTR charsRead = 0;
@@ -320,20 +331,20 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
         item.Title = item.Description.empty() ? item.ProcessName : item.Description;
     }
 
-    auto* vItems = reinterpret_cast<std::vector<AltTabWindowData>*>(lParam);
+    auto* vItems = pack->items;
     bool insert = true;
-    const bool excluded = IsExcludedProcess(ToLower(item.ProcessName));
+    const bool excluded = IsExcludedProcess(ctx, ToLower(item.ProcessName));
 
     // Alt+Tab / Alt+Ctrl+Tab: all windows.
-    if (g_IsAltTab || g_IsAltCtrlTab) {
+    if (ctx.IsAltTab || ctx.IsAltCtrlTab) {
         insert = !excluded;
     }
     // Alt+Backtick: only windows similar to the one focused when the hotkey
     // was pressed (captured by ShowAltTabWindow before the switcher takes the
     // foreground).
-    else if (g_IsAltBacktick) {
-        if (g_AltBacktickWndInfo.hWnd != nullptr && !g_AltBacktickWndInfo.ProcessName.empty()) {
-            insert = IsSimilarProcess(g_AltBacktickWndInfo.ProcessName, item.ProcessName);
+    else if (ctx.IsAltBacktick) {
+        if (ctx.AltBacktickWndInfo.hWnd != nullptr && !ctx.AltBacktickWndInfo.ProcessName.empty()) {
+            insert = IsSimilarProcess(ctx.AltBacktickWndInfo.ProcessName, item.ProcessName);
         } else {
             // No usable foreground reference (e.g. the shell desktop is focused);
             // fall back to listing every window rather than an empty list.
@@ -342,10 +353,10 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
     }
 
     // Apply the search string, if any.
-    if (insert && !g_SearchString.empty()) {
+    if (insert && !ctx.SearchString.empty()) {
         insert = true;
 
-        const std::vector<std::wstring> searchParts = Split(ToLower(g_SearchString));
+        const std::vector<std::wstring> searchParts = Split(ToLower(ctx.SearchString));
         const std::wstring titleLower = ToLower(item.Title);
         const std::wstring processNameLower = ToLower(item.ProcessName);
         const std::wstring descriptionLower = ToLower(item.Description);
@@ -357,9 +368,9 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
             if (titleIndex != std::wstring::npos) {
                 item.TitleHighlights.insert({ titleIndex, titleIndex + part.size() - 1 });
-            } else if (g_Settings.FuzzyMatchPercent != 100) {
+            } else if (ctx.FuzzyMatchPercent != 100) {
                 const FuzzyMatchResult fuzzyMatchRatio = GetPartialRatioW(part, titleLower);
-                if (fuzzyMatchRatio.score >= g_Settings.FuzzyMatchPercent) {
+                if (fuzzyMatchRatio.score >= ctx.FuzzyMatchPercent) {
                     item.TitleHighlights.insert({ fuzzyMatchRatio.start_pos, fuzzyMatchRatio.end_pos - 1 });
                     titleIndex = fuzzyMatchRatio.start_pos;
                 }
@@ -367,9 +378,9 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
             if (processNameIndex != std::wstring::npos) {
                 item.ProcessNameHighlights.insert({ processNameIndex, processNameIndex + part.size() - 1 });
-            } else if (g_Settings.FuzzyMatchPercent != 100) {
+            } else if (ctx.FuzzyMatchPercent != 100) {
                 const FuzzyMatchResult fuzzyMatchRatio = GetPartialRatioW(part, processNameLower);
-                if (fuzzyMatchRatio.score >= g_Settings.FuzzyMatchPercent) {
+                if (fuzzyMatchRatio.score >= ctx.FuzzyMatchPercent) {
                     item.ProcessNameHighlights.insert({ fuzzyMatchRatio.start_pos, fuzzyMatchRatio.end_pos - 1 });
                     processNameIndex = fuzzyMatchRatio.start_pos;
                 }
@@ -379,9 +390,9 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
             // not rendered anywhere, so it only needs to match -- there is no
             // highlight to store.
             if (descriptionIndex == std::wstring::npos && !descriptionLower.empty()
-                && g_Settings.FuzzyMatchPercent != 100) {
+                && ctx.FuzzyMatchPercent != 100) {
                 const FuzzyMatchResult fuzzyMatchRatio = GetPartialRatioW(part, descriptionLower);
-                if (fuzzyMatchRatio.score >= g_Settings.FuzzyMatchPercent) {
+                if (fuzzyMatchRatio.score >= ctx.FuzzyMatchPercent) {
                     descriptionIndex = fuzzyMatchRatio.start_pos;
                 }
             }
@@ -403,8 +414,26 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
 } // namespace
 
-std::vector<AltTabWindowData> GetAltTabWindows() {
+AltTabEnumContext CaptureAltTabEnumContext() {
+    AltTabEnumContext context;
+    context.IsAltTab                 = g_IsAltTab;
+    context.IsAltCtrlTab             = g_IsAltCtrlTab;
+    context.IsAltBacktick            = g_IsAltBacktick;
+    context.FuzzyMatchPercent        = g_Settings.FuzzyMatchPercent;
+    context.ProcessExclusionsEnabled = g_Settings.ProcessExclusionsEnabled;
+    context.SearchString             = g_SearchString;
+    context.AltBacktickWndInfo       = g_AltBacktickWndInfo;
+    context.ProcessExclusionList     = g_Settings.ProcessExclusionList;
+    return context;
+}
+
+std::vector<AltTabWindowData> EnumerateAltTabWindows(const AltTabEnumContext& context) {
     std::vector<AltTabWindowData> altTabWindows;
-    EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&altTabWindows));
+    EnumPack pack{ &altTabWindows, &context };
+    EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&pack));
     return altTabWindows;
+}
+
+std::vector<AltTabWindowData> GetAltTabWindows() {
+    return EnumerateAltTabWindows(CaptureAltTabEnumContext());
 }

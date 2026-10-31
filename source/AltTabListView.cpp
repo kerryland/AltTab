@@ -14,12 +14,42 @@
 #include <comdef.h>
 #include <format>
 #include <gdiplus.h>
+#include <memory>
+#include <mutex>
 #include <set>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace {
+
+// ----------------------------------------------------------------------------
+// Asynchronous window enumeration
+//
+// Enumerating windows probes every process on the desktop (WM_GETTEXT /
+// WM_GETICON plus PE version reads) and is far too slow to run inside the
+// low-level keyboard hook: Windows silently removes a hook that does not
+// return within ~1 s (LowLevelHooksTimeout), which historically let Alt+Tab
+// fall back to the native switcher under load. The enumeration therefore runs
+// on a detached worker thread; the hook only pops the window over, and the UI
+// thread consumes the finished list via WM_USER_ALTTAB_ENUM_DONE.
+// ----------------------------------------------------------------------------
+struct EnumResult {
+    DWORD                         generation = 0;
+    std::vector<AltTabWindowData> windows;
+};
+
+// Worker publishes here; the UI thread consumes it on the notification.
+std::mutex                   g_enumSlotMutex;
+std::shared_ptr<EnumResult>  g_enumSlot;
+
+// UI-thread bookkeeping; never touched by workers.
+DWORD g_enumGeneration          = 0;    // bumped for every worker we start
+bool  g_enumInFlight            = false; // a worker is currently enumerating
+bool  g_enumPending             = false; // a refresh was requested while busy
+bool  g_altTabWindowInitialized = false; // the first population was applied
+int   g_initialSwitchDirection  = 1;     // direction of the opening hotkey
 
 // ----------------------------------------------------------------------------
 // Module globals
@@ -284,6 +314,14 @@ void AltTabListViewShutdown() {
     g_cachedSSBgColor = 0xFFFFFFFF;
     g_MouseHoverIndex = -1;
     g_SearchString.clear();
+
+    // Any in-flight worker may still publish a stale result; the generation
+    // check in AltTabListViewProcessEnumResult drops it, and the next window
+    // instance starts its own fresh enumeration.
+    g_enumInFlight               = false;
+    g_enumPending                = false;
+    g_altTabWindowInitialized    = false;
+    g_initialSwitchDirection     = 1;
 }
 
 // ----------------------------------------------------------------------------
@@ -422,14 +460,78 @@ LRESULT CALLBACK ListViewSubclassProc(
 // ListView data & selection
 // ----------------------------------------------------------------------------
 
-void RefreshAltTabWindow() {
-    AT_LOG_TRACE;
+static void SizeAltTabWindowToContent() {
+    const HWND hHeader = ListView_GetHeader(g_hListView);
+    int headerHeight = 0;
+    if (hHeader) {
+        RECT rcHeader;
+        GetClientRect(hHeader, &rcHeader);
+        headerHeight = rcHeader.bottom - rcHeader.top;
+    }
+
+    RECT rcListView = {};
+    GetClientRect(g_hListView, &rcListView);
+    const int itemHeight =
+        ListView_GetItemRect(g_hListView, 0, &rcListView, LVIR_BOUNDS) ? rcListView.bottom - rcListView.top : 0;
+    const int itemCount = ListView_GetItemCount(g_hListView);
+
+    RECT rcSearch = {};
+    const int searchStringHeight = g_Settings.ShowSearchString && g_hSearchString
+        ? (GetClientRect(g_hSearchString, &rcSearch) ? rcSearch.bottom - rcSearch.top : 0)
+        : -1;
+
+    const int windowWidth  = g_Settings.WindowWidth;
+    const int windowHeight = g_Settings.WindowHeight;
+    const int screenWidth  = GetSystemMetrics(SM_CXSCREEN);
+    const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    const int windowX = (screenWidth - windowWidth) / 2;
+    const int windowY = (screenHeight - windowHeight) / 2;
+
+    int requiredHeight = itemHeight * itemCount + headerHeight + searchStringHeight + 2;
+
+    if (requiredHeight <= windowHeight) {
+        SetWindowPos(g_hAltTabWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
+        WindowResizeAndPosition(g_hAltTabWnd, windowWidth, requiredHeight);
+    } else {
+        const int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
+        const int processNameWidth = GetColProcessNameWidth();
+        const int colTitleWidth = windowWidth - (COL_ICON_WIDTH + processNameWidth) - scrollBarWidth - 2;
+
+        if (itemHeight > 0) {
+            const int numberOfVisibleItems = (windowHeight - itemHeight + 1) / itemHeight;
+            const int boundedLvHeight = numberOfVisibleItems * itemHeight + headerHeight;
+            requiredHeight = boundedLvHeight + searchStringHeight + 2;
+
+            ListView_SetColumnWidth(g_hListView, 1, colTitleWidth);
+
+            SetWindowPos(
+                g_hListView,
+                nullptr,
+                0,
+                0,
+                windowWidth - 2,
+                boundedLvHeight,
+                SWP_NOMOVE | SWP_NOZORDER);
+        }
+
+        SetWindowPos(g_hAltTabWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
+        WindowResizeAndPosition(g_hAltTabWnd, windowWidth, requiredHeight);
+    }
+}
+
+// Build the ListView rows + image list from the given enumeration result.
+static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
+    const bool isFirstPopulation = !g_altTabWindowInitialized;
+
+    // The freshness timer keeps enumerating even while the desktop is idle;
+    // skip the rebuild when nothing changed.
+    if (!isFirstPopulation && windows.size() == g_AltTabWindows.size()
+        && std::equal(windows.begin(), windows.end(), g_AltTabWindows.begin())) {
+        return;
+    }
 
     ListView_DeleteAllItems(g_hListView);
-    g_AltTabWindows.clear();
-
-    // Enumerate windows, applying the current search/filter criteria.
-    g_AltTabWindows = GetAltTabWindows();
+    g_AltTabWindows = std::move(windows);
 
     // Mark processes that are running from different paths with the same
     // process name + title (useful for "_xplorer2.exe" style duplicates).
@@ -471,7 +573,102 @@ void RefreshAltTabWindow() {
         AddListViewItem(g_hListView, i, g_AltTabWindows[i]);
     }
 
-    ATWListViewSelectItem(g_SelectedIndex);
+    if (isFirstPopulation) {
+        g_altTabWindowInitialized = true;
+
+        if (!g_AltTabWindows.empty()) {
+            // The window was opened by the Alt+Tab key press whose direction we
+            // captured; the old synchronous flow highlighted row 0 first and
+            // then moved to (0 + N + direction) % N on the opening press, so
+            // land directly on that row now that the list has arrived.
+            const int N = (int)g_AltTabWindows.size();
+            ATWListViewSelectItem((N + g_initialSwitchDirection) % N);
+        } else {
+            g_SelectedIndex = -1;
+        }
+
+        SizeAltTabWindowToContent();
+    } else {
+        ATWListViewSelectItem(g_SelectedIndex);
+    }
+}
+
+void AltTabListViewSetInitialDirection(int direction) {
+    g_initialSwitchDirection = direction;
+}
+
+void AltTabListViewProcessEnumResult() {
+    AT_LOG_TRACE;
+
+    std::shared_ptr<EnumResult> result;
+    {
+        std::lock_guard<std::mutex> lock(g_enumSlotMutex);
+        result = std::move(g_enumSlot);
+        g_enumSlot.reset();
+    }
+
+    // No result (a stale notification after destroy/recreate): just settle the
+    // bookkeeping and roll any pending refresh.
+    if (!result) {
+        g_enumInFlight = false;
+        if (g_enumPending) {
+            g_enumPending = false;
+            RefreshAltTabWindow();
+        }
+        return;
+    }
+
+    // A worker that outlived the requesting window/refresh cycle must not
+    // overwrite fresher data.
+    if (result->generation != g_enumGeneration) {
+        g_enumInFlight = false;
+        if (g_enumPending) {
+            g_enumPending = false;
+            RefreshAltTabWindow();
+        }
+        return;
+    }
+
+    ApplyEnumResults(std::move(result->windows));
+
+    g_enumInFlight = false;
+    if (g_enumPending) {
+        g_enumPending = false;
+        RefreshAltTabWindow();
+    }
+}
+
+void RefreshAltTabWindow() {
+    AT_LOG_TRACE;
+
+    if (g_hAltTabWnd == nullptr) {
+        return;
+    }
+
+    // Coalesce: the freshness timer (100 ms in Release) can fire while a
+    // worker is still enumerating; remember that a refresh was requested and
+    // start exactly one more pass once the current one finishes.
+    if (g_enumInFlight) {
+        g_enumPending = true;
+        return;
+    }
+    g_enumInFlight = true;
+
+    const DWORD generation = ++g_enumGeneration;
+    const AltTabEnumContext context = CaptureAltTabEnumContext();
+    const HWND hTargetWindow = g_hAltTabWnd;
+
+    std::thread worker([generation, context, hTargetWindow]() {
+        auto result = std::make_shared<EnumResult>();
+        result->generation = generation;
+        result->windows    = EnumerateAltTabWindows(context);
+        {
+            std::lock_guard<std::mutex> lock(g_enumSlotMutex);
+            g_enumSlot = result;
+        }
+        PostMessageW(hTargetWindow, WM_USER_ALTTAB_ENUM_DONE, 0, 0);
+    });
+    worker.detach();
 }
 
 void ATWListViewSelectItem(int rowNumber) {
@@ -1100,64 +1297,17 @@ void InitListView(HWND hWnd) {
     SetWindowLong(hWnd, GWL_EXSTYLE, GetWindowLong(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
     SetLayeredWindowAttributes(hWnd, RGB(255, 255, 255), (BYTE)g_Settings.Transparency, LWA_ALPHA);
 
+    // Kick off the asynchronous enumeration; the first result populates the
+    // ListView and sizes the window to fit (SizeAltTabWindowToContent).
     RefreshAltTabWindow();
 
-    // Size the window to fit the item count (up to the maximum height).
-    const HWND hHeader = ListView_GetHeader(g_hListView);
-    int headerHeight = 0;
-    if (hHeader) {
-        RECT rcHeader;
-        GetClientRect(hHeader, &rcHeader);
-        headerHeight = rcHeader.bottom - rcHeader.top;
-    }
-
-    RECT rcListView = {};
-    GetClientRect(g_hListView, &rcListView);
-    const int itemHeight =
-        ListView_GetItemRect(g_hListView, 0, &rcListView, LVIR_BOUNDS) ? rcListView.bottom - rcListView.top : 0;
-    const int itemCount = ListView_GetItemCount(g_hListView);
-    int requiredHeight = itemHeight * itemCount + headerHeight + searchStringHeight + 2;
-
-    if (requiredHeight <= g_Settings.WindowHeight) {
-        SetWindowPos(hWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
-        WindowResizeAndPosition(hWnd, windowWidth, requiredHeight);
-    } else {
-        const int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
-        const int processNameWidth = GetColProcessNameWidth();
-        const int colTitleWidth =
-            g_Settings.WindowWidth - (COL_ICON_WIDTH + processNameWidth) - scrollBarWidth - 2;
-
-        if (itemHeight > 0) {
-            const int numberOfVisibleItems = (g_Settings.WindowHeight - itemHeight + 1) / itemHeight;
-            const int boundedLvHeight = numberOfVisibleItems * itemHeight + headerHeight;
-            requiredHeight = boundedLvHeight + searchStringHeight + 2;
-
-            ListView_SetColumnWidth(hListView, 1, colTitleWidth);
-
-            SetWindowPos(
-                hListView,
-                nullptr,
-                0,
-                0,
-                windowWidth - 2,
-                boundedLvHeight,
-                SWP_NOMOVE | SWP_NOZORDER);
-        }
-
-        SetWindowPos(hWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
-        WindowResizeAndPosition(hWnd, windowWidth, requiredHeight);
-    }
+    // Provisional size until the first enumeration result arrives.
+    SetWindowPos(hWnd, HWND_TOPMOST, windowX, windowY, windowWidth, windowHeight, SWP_NOZORDER);
 
     SetForegroundWindow(hWnd);
     SetFocus(hSearchString);
 
-    // Select the first row.
-    LVITEM lvItem = {};
-    lvItem.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
-    lvItem.state     = LVIS_FOCUSED | LVIS_SELECTED;
-    SendMessageW(hListView, LVM_SETITEMSTATE, 0, (LPARAM)&lvItem);
-
-    // Keep the list fresh while the window is open.
+    // Keep the list fresh while the window stays open.
     SetTimer(hWnd, TIMER_WINDOW_COUNT, TIMER_WINDOW_COUNT_ELAPSE, nullptr);
 }
 

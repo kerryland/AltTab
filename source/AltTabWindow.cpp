@@ -122,6 +122,7 @@ HWND ShowAltTabWindow(HWND& hAltTabWnd, int direction) {
             g_AltBacktickWndInfo = src;
         }
 
+        AltTabListViewSetInitialDirection(direction);
         hAltTabWnd = CreateAltTabWindow();
         SetForegroundWindow(hAltTabWnd);
     }
@@ -177,6 +178,11 @@ INT_PTR CALLBACK AltTabWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         HANDLE_MSG(hWnd, WM_NOTIFY        , ATW_OnNotify        );
         HANDLE_MSG(hWnd, WM_SYSCOMMAND    , ATW_OnSysCommand    );
         HANDLE_MSG(hWnd, WM_TIMER         , ATW_OnTimer         );
+
+        case WM_USER_ALTTAB_ENUM_DONE:
+            // The enumeration worker finished; apply its result on the UI thread.
+            AltTabListViewProcessEnumResult();
+            return 0;
 
         case WM_SYSCHAR:
             // Don't let DefWindowProc play the menu beep for Alt+key combos
@@ -277,21 +283,10 @@ static void ATW_OnTimer(HWND /*hwnd*/, UINT /*id*/) {
         AT_LOG_DEBUG("g_SearchString: [%ls]", g_SearchString.c_str());
 #endif
 
-    const std::vector<AltTabWindowData> altTabWindows = GetAltTabWindows();
-
-    bool doRefresh = altTabWindows.size() != g_AltTabWindows.size();
-    if (!doRefresh) {
-        for (size_t i = 0; i < altTabWindows.size(); ++i) {
-            if (altTabWindows[i] != g_AltTabWindows[i]) {
-                doRefresh = true;
-                break;
-            }
-        }
-    }
-
-    if (doRefresh) {
-        RefreshAltTabWindow();
-    }
+    // Window enumeration runs on a worker thread; the fresh results are
+    // applied when they arrive (WM_USER_ALTTAB_ENUM_DONE), rebuilding the list
+    // only when the desktop actually changed.
+    RefreshAltTabWindow();
 }
 
 static void ATW_OnDestroy(HWND hwnd) {

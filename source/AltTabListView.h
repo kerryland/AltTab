@@ -23,6 +23,25 @@ void InitImageList();
 void RefreshAltTabWindow();
 
 /*!
+ * \brief Remember the direction (1 / -1 / 0) of the hotkey that opened the
+ *        window, so the first (asynchronous) list population lands on the
+ *        same row the synchronous flow used to select after the first press.
+ */
+void AltTabListViewSetInitialDirection(int direction);
+
+/*!
+ * \brief Consume the latest asynchronous enumeration result and (re)build the
+ *        list. Posted to the AltTab window as WM_USER_ALTTAB_ENUM_DONE;
+ *        must be called on the UI thread.
+ */
+void AltTabListViewProcessEnumResult();
+
+/*!
+ * \brief Posted by the enumeration worker thread once a result is ready.
+ */
+#define WM_USER_ALTTAB_ENUM_DONE (WM_APP + 2)
+
+/*!
  * \brief Release fonts / resources owned by the ListView module (called when
  *        the AltTab window is destroyed).
  */
