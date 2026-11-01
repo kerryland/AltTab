@@ -8,6 +8,19 @@ namespace {
     HWND     g_hCustomToolTip = nullptr;
     TOOLINFO g_ToolInfo       = {};
     bool     g_TooltipVisible = false;
+
+    // Actual window-less timer id. SetTimer(nullptr, id, ...) ignores the
+    // requested id and returns its own internal one; KillTimer must be given
+    // that returned id or the timer is never removed and keeps firing (a
+    // 1000 ms tooltip fired HideCustomToolTip once a second forever).
+    UINT_PTR g_tooltipTimerId = 0;
+
+    void KillTooltipTimer() {
+        if (g_tooltipTimerId != 0) {
+            KillTimer(nullptr, g_tooltipTimerId);
+            g_tooltipTimerId = 0;
+        }
+    }
 }
 
 void CreateCustomToolTip() {
@@ -66,7 +79,7 @@ void ShowCustomToolTipAt(const std::wstring& tooltipText, const POINT& pt, const
         return;
 
     // Cancel any stale hide-timer for the previous tooltip.
-    KillTimer(nullptr, TIMER_CUSTOM_TOOLTIP);
+    KillTooltipTimer();
 
     g_ToolInfo.lpszText = (LPWSTR)(LPCWSTR)tooltipText.c_str();
     SendMessageW(g_hCustomToolTip, TTM_SETTOOLINFO, 0, (LPARAM)&g_ToolInfo);
@@ -74,13 +87,13 @@ void ShowCustomToolTipAt(const std::wstring& tooltipText, const POINT& pt, const
     SendMessageW(g_hCustomToolTip, TTM_TRACKACTIVATE, true, (LPARAM)(LPTOOLINFO)&g_ToolInfo);
 
     // A negative duration keeps the tooltip visible until explicitly hidden.
-    SetTimer(nullptr, TIMER_CUSTOM_TOOLTIP, static_cast<UINT>(duration), HideCustomToolTip);
+    g_tooltipTimerId = SetTimer(nullptr, TIMER_CUSTOM_TOOLTIP, static_cast<UINT>(duration), HideCustomToolTip);
     g_TooltipVisible = true;
 }
 
 void CALLBACK HideCustomToolTip(HWND /*hWnd*/, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
     AT_LOG_TRACE;
-    KillTimer(nullptr, TIMER_CUSTOM_TOOLTIP);
+    KillTooltipTimer();
     if (g_hCustomToolTip != nullptr) {
         SendMessageW(g_hCustomToolTip, TTM_TRACKACTIVATE, false, (LPARAM)(LPTOOLINFO)&g_ToolInfo);
     }
