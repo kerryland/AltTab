@@ -239,8 +239,7 @@ void ContextMenuItemHandler(HWND hWnd, HMENU /*hSubMenu*/, UINT menuItemId) {
         ShowCustomToolTip(L"Checking for updates..., please wait.");
 
         // Run in a thread so the tooltip can display.
-        std::thread thr(CheckForUpdates, false);
-        thr.detach();
+        StartUpdateCheck(false);
     }
     break;
 
@@ -353,8 +352,7 @@ void TrayContextMenuItemHandler(HWND /*hWnd*/, HMENU hSubMenu, UINT menuItemId) 
         AT_LOG_INFO("ID_TRAYCONTEXTMENU_CHECKFORUPDATES");
         ShowCustomToolTip(L"Checking for updates..., please wait.");
 
-        std::thread thr(CheckForUpdates, false);
-        thr.detach();
+        StartUpdateCheck(false);
     }
     break;
 

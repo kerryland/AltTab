@@ -11,6 +11,7 @@
 #include "Utils.h"
 #include "Resource.h"
 #include <algorithm>
+#include <atomic>
 #include <comdef.h>
 #include <format>
 #include <gdiplus.h>
@@ -50,6 +51,11 @@ bool  g_enumInFlight            = false; // a worker is currently enumerating
 bool  g_enumPending             = false; // a refresh was requested while busy
 bool  g_altTabWindowInitialized = false; // the first population was applied
 int   g_initialSwitchDirection  = 1;     // direction of the opening hotkey
+
+// The enumeration runs on at most one worker at a time; keep its handle so it
+// can be joined before process teardown instead of racing the CRT.
+std::thread       g_enumWorker;
+std::atomic<bool> g_enumShutdown{false};
 
 // ----------------------------------------------------------------------------
 // Module globals
@@ -638,10 +644,19 @@ void AltTabListViewProcessEnumResult() {
     }
 }
 
+void AltTabListViewStopAsyncEnumeration() {
+    g_enumShutdown.store(true);
+    if (g_enumWorker.joinable()) {
+        // The worker's cross-process probes are all time-limited; joining here
+        // is bounded and prevents it from colliding with CRT teardown.
+        g_enumWorker.join();
+    }
+}
+
 void RefreshAltTabWindow() {
     AT_LOG_TRACE;
 
-    if (g_hAltTabWnd == nullptr) {
+    if (g_enumShutdown.load() || g_hAltTabWnd == nullptr) {
         return;
     }
 
@@ -658,7 +673,13 @@ void RefreshAltTabWindow() {
     const AltTabEnumContext context = CaptureAltTabEnumContext();
     const HWND hTargetWindow = g_hAltTabWnd;
 
-    std::thread worker([generation, context, hTargetWindow]() {
+    // Single-flight (see g_enumInFlight above), so any previous worker kept in
+    // g_enumWorker has already finished; join it before reusing the slot.
+    if (g_enumWorker.joinable()) {
+        g_enumWorker.join();
+    }
+
+    g_enumWorker = std::thread([generation, context, hTargetWindow]() {
         auto result = std::make_shared<EnumResult>();
         result->generation = generation;
         result->windows    = EnumerateAltTabWindows(context);
@@ -668,7 +689,6 @@ void RefreshAltTabWindow() {
         }
         PostMessageW(hTargetWindow, WM_USER_ALTTAB_ENUM_DONE, 0, 0);
     });
-    worker.detach();
 }
 
 void ATWListViewSelectItem(int rowNumber) {

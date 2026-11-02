@@ -5,6 +5,7 @@
 #include "Utils.h"
 #include "version.h"
 #include "Resource.h"
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -12,6 +13,7 @@
 #include <regex>
 #include <shellapi.h>
 #include <string>
+#include <thread>
 #include <wininet.h>
 
 #pragma comment(lib, "wininet.lib")
@@ -21,6 +23,22 @@ struct CFU_Info {
     std::string UpdateVersion;
     std::string Changes;
 } g_UpdatesInfo;
+
+namespace {
+
+// Single-flight update-check thread (replaces the old detach() pattern) plus a
+// shutdown flag, so at exit StopUpdateCheck() can abort and join it instead of
+// the worker crashing into torn-down log4cpp/CRT state.
+std::thread         g_updatesThread;
+std::atomic<bool>   g_updatesInFlight{false};
+std::atomic<bool>   g_updatesStopping{false};
+
+// Currently active WinINet handles; closed by StopUpdateCheck() to unblock a
+// worker stuck in a network read (InternetCloseHandle aborts pending I/O).
+HINTERNET g_hInternet = nullptr;
+HINTERNET g_hConnect  = nullptr;
+
+} // namespace
 
 INT_PTR CALLBACK ATCheckForUpdatesDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -46,10 +64,14 @@ int CompareVersions(const std::string& updateVersion, const std::string& current
 void CheckForUpdates(const bool quiteMode) {
     AT_LOG_TRACE;
 
+    if (g_updatesStopping.load()) {
+        return;
+    }
+
     HINTERNET hInternet = InternetOpen(L"AltTab", INTERNET_OPEN_TYPE_DIRECT, nullptr, nullptr, 0);
     if (!hInternet) {
         AT_LOG_ERROR("Error initializing WinINet");
-        if (!quiteMode) {
+        if (!quiteMode && !g_updatesStopping.load()) {
             MessageBoxW(
                 nullptr,
                 L"Failed to initialize network access.",
@@ -58,30 +80,39 @@ void CheckForUpdates(const bool quiteMode) {
         }
         return;
     }
+    g_hInternet = hInternet;
 
     // GitHub's "latest release" API responds with JSON (tag_name + body).
     HINTERNET hConnect = InternetOpenUrl(hInternet, AT_UPDATE_FILE_URL, nullptr, 0, INTERNET_FLAG_RELOAD, 0);
     if (!hConnect) {
         AT_LOG_ERROR("Error opening URL with WinINet");
-        if (!quiteMode) {
+        if (!quiteMode && !g_updatesStopping.load()) {
             const std::wstring info = std::format(L"Failed to download file [{}], please check again.", AT_UPDATE_FILE_URL);
             MessageBoxW(nullptr, info.c_str(), AT_PRODUCT_NAMEW, MB_OK | MB_ICONERROR | MB_TOPMOST);
         }
         InternetCloseHandle(hInternet);
+        g_hInternet = nullptr;
         return;
     }
+    g_hConnect = hConnect;
 
     // Read the response content.
     char buffer[1024] = {};
     DWORD bytesRead = 0;
     std::string contents;
-    while (InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
+    while (!g_updatesStopping.load() && InternetReadFile(hConnect, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
         contents.append(buffer, bytesRead);
         bytesRead = 0;
     }
 
-    InternetCloseHandle(hConnect);
-    InternetCloseHandle(hInternet);
+    if (g_hConnect) {
+        InternetCloseHandle(hConnect);
+        g_hConnect = nullptr;
+    }
+    if (g_hInternet) {
+        InternetCloseHandle(hInternet);
+        g_hInternet = nullptr;
+    }
 
     if (contents.empty()) {
         AT_LOG_ERROR("Update file is empty.");
@@ -131,7 +162,7 @@ void CheckForUpdates(const bool quiteMode) {
 
     if (updateVersion.empty() || !IsValidVersion(updateVersion)) {
         AT_LOG_ERROR("Invalid update version: %s, please check again!", updateVersion.c_str());
-        if (!quiteMode) {
+        if (!quiteMode && !g_updatesStopping.load()) {
             const std::string info = std::format("Invalid update version: {}", updateVersion);
             MessageBoxA(nullptr, info.c_str(), AT_PRODUCT_NAMEA, MB_OK | MB_ICONERROR | MB_TOPMOST);
         }
@@ -144,7 +175,9 @@ void CheckForUpdates(const bool quiteMode) {
         g_UpdatesInfo.CurrentVersion = currentVersion;
         g_UpdatesInfo.UpdateVersion  = updateVersion;
         g_UpdatesInfo.Changes        = latestChanges;
-        DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_CHECK_FOR_UPDATES), nullptr, ATCheckForUpdatesDlgProc);
+        if (!g_updatesStopping.load()) {
+            DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_CHECK_FOR_UPDATES), nullptr, ATCheckForUpdatesDlgProc);
+        }
     } else {
         const std::string info = std::format(
             "You are using the latest version of {}.\n"
@@ -155,7 +188,7 @@ void CheckForUpdates(const bool quiteMode) {
             updateVersion);
         if (quiteMode) {
             AT_LOG_INFO(info.c_str());
-        } else {
+        } else if (!g_updatesStopping.load()) {
             MessageBoxA(nullptr, info.c_str(), AT_PRODUCT_NAMEA, MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
         }
     }
@@ -241,4 +274,47 @@ void WriteCheckForUpdatesTS(const std::chrono::system_clock::time_point& timesta
     const std::filesystem::path filePath = std::filesystem::path(ATLocalAppDataDirPath()) / CHECK_FOR_UPDATES_FILENAME;
     std::ofstream file(filePath.string());
     file << std::chrono::system_clock::to_time_t(timestamp);
+}
+
+// ----------------------------------------------------------------------------
+// Background thread management
+// ----------------------------------------------------------------------------
+
+void StartUpdateCheck(bool quiteMode) {
+    if (g_updatesStopping.load()) {
+        return;
+    }
+    // One check at a time; a request while a check is already running is a no-op.
+    if (g_updatesInFlight.exchange(true)) {
+        return;
+    }
+    // The previous worker (if any) has finished at this point (see the flag
+    // above); join its finished handle before reusing the thread object.
+    if (g_updatesThread.joinable()) {
+        g_updatesThread.join();
+    }
+    g_updatesThread = std::thread([quiteMode]() {
+        CheckForUpdates(quiteMode);
+        g_updatesInFlight.store(false);
+    });
+}
+
+void StopUpdateCheck() {
+    g_updatesStopping.store(true);
+
+    // Unblock a worker stuck in a network read; InternetCloseHandle aborts
+    // pending WinINet I/O. Closing an already-closed handle just returns FALSE.
+    if (HINTERNET c = g_hConnect) {
+        InternetCloseHandle(c);
+        g_hConnect = nullptr;
+    }
+    if (HINTERNET i = g_hInternet) {
+        InternetCloseHandle(i);
+        g_hInternet = nullptr;
+    }
+
+    if (g_updatesThread.joinable()) {
+        g_updatesThread.join();
+    }
+    g_updatesInFlight.store(false);
 }

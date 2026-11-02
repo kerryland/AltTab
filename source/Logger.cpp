@@ -42,8 +42,14 @@ void CreateLogger() {
 
     appender->setLayout(layout);
 
-    // Create a category and add the appender to it
-    g_Logger.reset(&log4cpp::Category::getRoot(), [](auto&) { log4cpp::Category::shutdown(); });
+    // Create a category and add the appender to it.
+    // The deleter leaks the log4cpp hierarchy on purpose: Category::shutdown()
+    // destroys log4cpp's internal critical sections, and background threads
+    // (update check, window enumeration) may still be logging while the CRT
+    // destroys this global at process exit -- racing that teardown crashed in
+    // ntdll!RtlEnterCriticalSection on freed memory. The logger is only torn
+    // down with the process itself.
+    g_Logger.reset(&log4cpp::Category::getRoot(), [](log4cpp::Category*) {});
     g_Logger->setAppender(appender);
 
     // Set priority for root logger

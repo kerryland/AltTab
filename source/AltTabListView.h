@@ -42,6 +42,13 @@ void AltTabListViewProcessEnumResult();
 #define WM_USER_ALTTAB_ENUM_DONE (WM_APP + 2)
 
 /*!
+ * \brief Stop the asynchronous enumeration machinery. Called once from WinMain
+ *        after the message loop exits, so no background worker can outlive the
+ *        CRT teardown (which previously crashed in EnterCriticalSection).
+ */
+void AltTabListViewStopAsyncEnumeration();
+
+/*!
  * \brief Release fonts / resources owned by the ListView module (called when
  *        the AltTab window is destroyed).
  */

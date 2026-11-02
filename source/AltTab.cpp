@@ -171,8 +171,7 @@ int APIENTRY wWinMain(
 
     // Check for updates.
     if (g_Settings.CheckForUpdatesOpt == L"Startup") {
-        std::thread thr(CheckForUpdates, true);
-        thr.detach();
+        StartUpdateCheck(true);
     } else if (g_Settings.CheckForUpdatesOpt != L"Never") {
         // Check every hour; the callback decides based on the timestamp.
         SetTimer(g_hMainWnd, TIMER_CHECK_FOR_UPDATES, 3600000, CheckForUpdatesTimerCB);
@@ -185,6 +184,12 @@ int APIENTRY wWinMain(
             DispatchMessage(&msg);
         }
     }
+
+    // Stop all background work before tearing down COM/GDI+/CRT state: a
+    // worker still enumerating or checking for updates used to race the
+    // destruction of log4cpp's critical sections and crash on exit.
+    AltTabListViewStopAsyncEnumeration();
+    StopUpdateCheck();
 
     if (g_KeyboardHook) {
         UnhookWindowsHookEx(g_KeyboardHook);
@@ -430,7 +435,9 @@ void CALLBACK CheckForUpdatesTimerCB(HWND /*hWnd*/, UINT /*uMsg*/, UINT_PTR /*id
 
     if ((frequency == L"Daily" && timeDiff >= std::chrono::hours(24))
         || (frequency == L"Weekly" && timeDiff >= std::chrono::hours(24 * 7))) {
-        CheckForUpdates(true);
+        // Run on the background thread (also keeps the UI/hook responsive on a
+        // slow network); a check already in progress is skipped.
+        StartUpdateCheck(true);
         WriteCheckForUpdatesTS(currentTimeStamp);
     } else {
         AT_LOG_INFO("Update check not required at this time.");
