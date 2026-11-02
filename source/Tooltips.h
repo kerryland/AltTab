@@ -10,11 +10,9 @@ const wchar_t* TT_SETTINGS_FILEPATH            = L"AltTab Settings file path";
 
 const wchar_t* TT_SIMILAR_PROCESS_GROUPS       = LR"(Similar Process Groups:
 
-Processes in a process group are separated by forward slash (/) and process groups
-are separated by Pipe/Vertical Bar (|).
-A file/process name can't contain any of the following characters: \ / : * ? " < > |
-
-Example: notepad.exe/notepad++.exe|iexplore.exe/chrome.exe/firefox.exe|explorer.exe
+Alt+Backtick cycles through all the windows of the applications in the same
+group. Click "Manage Similar Process Groups..." to pick processes from a list
+and group them visually; each process can belong to at most one group.
 )";
 
 const wchar_t* TT_FUZZY_MATCH_PERCENT          = LR"(Fuzzy name match percent between search string and process name/title.

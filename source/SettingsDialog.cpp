@@ -1,5 +1,6 @@
 #include "PreCompile.h"
 #include "SettingsDialog.h"
+#include "SimilarGroupsDialog.h"
 #include "AltTabSettings.h"
 #include "GlobalData.h"
 #include "Tooltips.h"
@@ -15,6 +16,38 @@ HWND g_hSettingsWnd = nullptr;
 namespace {
 
 HWND g_hToolTip     = nullptr;
+
+// The "similar process groups" value is edited through the manager dialog
+// (IDD_SIMILARGROUPS), never by typing in the read-only preview edit control.
+std::wstring g_similarGroupsValue;
+
+// Render the pipe/slash groups value as one readable line per group for the
+// read-only preview edit.
+std::wstring FormatGroupsPreview(const std::wstring& value) {
+    std::wstring preview;
+    for (const std::wstring& groupStr : Split(value, L"|")) {
+        const auto members = Split(groupStr, L"/");
+        if (members.empty()) {
+            continue;
+        }
+        std::wstring line;
+        for (size_t i = 0; i < members.size(); ++i) {
+            if (i > 0) {
+                line += L", ";
+            }
+            line += members[i];
+        }
+        if (!preview.empty()) {
+            preview += L"\r\n";
+        }
+        preview += line;
+    }
+    return preview.empty() ? L"(none)" : preview;
+}
+
+void RefreshGroupsPreview(HWND hDlg) {
+    SetDlgItemTextW(hDlg, IDC_EDIT_SIMILAR_PROCESS_GROUPS, FormatGroupsPreview(g_similarGroupsValue).c_str());
+}
 
 #define BOOL_TO_CSTR(b) ((b) ? "true" : "false")
 
@@ -177,7 +210,7 @@ void ATLogSettings(const AltTabSettings& settings) {
  */
 void ATReadSettingsFromUI(HWND hDlg, AltTabSettings& settings) {
     settings.SSCueBannerText          = GetDlgItemTextEx(hDlg, IDC_EDIT_SS_BANNER_TEXT);
-    settings.SimilarProcessGroups     = GetDlgItemTextEx(hDlg, IDC_EDIT_SIMILAR_PROCESS_GROUPS);
+    settings.SimilarProcessGroups     = g_similarGroupsValue;
     settings.FuzzyMatchPercent        = GetDlgItemInt(hDlg, IDC_EDIT_FUZZY_MATCH_PERCENT, nullptr, FALSE);
     settings.Transparency             = GetDlgItemInt(hDlg, IDC_EDIT_WINDOW_TRANSPARENCY, nullptr, FALSE);
     settings.WidthPercentage          = GetDlgItemInt(hDlg, IDC_EDIT_WINDOW_WIDTH_PERCENTAGE, nullptr, FALSE);
@@ -267,7 +300,11 @@ void ATApplySettings(HWND hDlg) {
 void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     SetDlgItemText(hDlg, IDC_EDIT_SETTINGS_FILEPATH, ATSettingsFilePath().c_str());
     SetDlgItemText(hDlg, IDC_EDIT_SS_BANNER_TEXT, settings.SSCueBannerText.c_str());
-    SetDlgItemText(hDlg, IDC_EDIT_SIMILAR_PROCESS_GROUPS, settings.SimilarProcessGroups.c_str());
+
+    // Similar process groups are managed through IDD_SIMILARGROUPS; the edit
+    // control only previews the current value in a human-readable form.
+    g_similarGroupsValue = settings.SimilarProcessGroups;
+    RefreshGroupsPreview(hDlg);
 
     // Monospace font for the process group / exclusion editors.
     LOGFONTW lfMonospace = {};
@@ -444,6 +481,19 @@ INT_PTR CALLBACK ATSettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
                 ATLogSettings(g_Settings);
 #endif // _DEBUG
                 ATSettingsInitDialog(hDlg, g_Settings);
+            }
+            return (INT_PTR)TRUE;
+        }
+
+        if (commandId == IDC_BUTTON_MANAGE_GROUPS) {
+            AT_LOG_INFO("IDC_BUTTON_MANAGE_GROUPS Pressed!");
+
+            std::wstring newValue;
+            if (EditSimilarProcessGroups(hDlg, g_similarGroupsValue, newValue) && newValue != g_similarGroupsValue) {
+                AT_LOG_INFO("IDC_BUTTON_MANAGE_GROUPS: similar process groups updated");
+                g_similarGroupsValue = newValue;
+                RefreshGroupsPreview(hDlg);
+                EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_APPLY), AreSettingsModified(hDlg));
             }
             return (INT_PTR)TRUE;
         }
