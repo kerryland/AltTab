@@ -85,12 +85,10 @@ HWND CreateAltTabWindow() {
         return nullptr;
     }
 
-    SetForegroundWindow(hWnd);
-    SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-    ShowWindow(hWnd, SW_SHOWNORMAL);
-    UpdateWindow(hWnd);
-    BringWindowToTop(hWnd);
-
+    // Deliberately NOT shown here: the window list is populated
+    // asynchronously, so showing now would flash the provisional (full-size)
+    // window before it is resized to fit its content. ApplyEnumResults brings
+    // it up once the first population has sized it.
     return hWnd;
 }
 
@@ -124,7 +122,6 @@ HWND ShowAltTabWindow(HWND& hAltTabWnd, int direction) {
 
         AltTabListViewSetInitialDirection(direction);
         hAltTabWnd = CreateAltTabWindow();
-        SetForegroundWindow(hAltTabWnd);
     }
 
     // Always give focus to the search string edit control.

@@ -523,6 +523,18 @@ static void SizeAltTabWindowToContent() {
         SetWindowPos(g_hAltTabWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
         WindowResizeAndPosition(g_hAltTabWnd, windowWidth, requiredHeight);
     }
+
+    // Column widths mix DPI-scaled and raw constants, so their sum can exceed
+    // the (DPI-scaled) client width and pop a horizontal scrollbar. Pin the
+    // title column to what actually fits the final client area.
+    RECT rcFit = {};
+    GetClientRect(g_hListView, &rcFit);
+    const int fitWidth = (rcFit.right - rcFit.left) - ListView_GetColumnWidth(g_hListView, 0)
+                         - (g_Settings.ShowColProcessName ? ListView_GetColumnWidth(g_hListView, 2) : 0)
+                         - GetSystemMetrics(SM_CXVSCROLL) - 2;
+    if (fitWidth > 60) {
+        ListView_SetColumnWidth(g_hListView, 1, fitWidth);
+    }
 }
 
 // Build the ListView rows + image list from the given enumeration result.
@@ -594,6 +606,12 @@ static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
         }
 
         SizeAltTabWindowToContent();
+
+        // Show the window now that it is correctly sized, and give it focus
+        // (it was created hidden so it never flashes at the provisional size).
+        ShowWindow(g_hAltTabWnd, SW_SHOWNORMAL);
+        SetForegroundWindow(g_hAltTabWnd);
+        SetFocus(g_hSearchString);
     } else {
         ATWListViewSelectItem(g_SelectedIndex);
     }
@@ -1318,14 +1336,12 @@ void InitListView(HWND hWnd) {
     SetLayeredWindowAttributes(hWnd, RGB(255, 255, 255), (BYTE)g_Settings.Transparency, LWA_ALPHA);
 
     // Kick off the asynchronous enumeration; the first result populates the
-    // ListView and sizes the window to fit (SizeAltTabWindowToContent).
+    // ListView, sizes the window to fit, and shows it (it is created hidden to
+    // avoid flashing the provisional size).
     RefreshAltTabWindow();
 
     // Provisional size until the first enumeration result arrives.
     SetWindowPos(hWnd, HWND_TOPMOST, windowX, windowY, windowWidth, windowHeight, SWP_NOZORDER);
-
-    SetForegroundWindow(hWnd);
-    SetFocus(hSearchString);
 
     // Keep the list fresh while the window stays open.
     SetTimer(hWnd, TIMER_WINDOW_COUNT, TIMER_WINDOW_COUNT_ELAPSE, nullptr);
