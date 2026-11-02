@@ -87,8 +87,11 @@ for %%c in (%CONFIGS%) do (
         "%MSBUILD%" /m /p:Configuration=%%c /p:Platform=x64 AltTab.sln
     )
     if errorlevel 1 (
-        echo [ERROR] Build failed for %%c ^| x64.
+        echo [ERROR] Build failed for %%c ^| x64. If the error is LNK1104
+        echo         ^(cannot open the .exe^), close any running AltTab instance first.
         set "FAILED=1"
+    ) else (
+        echo [OK] %%c ^| x64: %~dp0x64\%%c\AltTab.exe
     )
 )
 
