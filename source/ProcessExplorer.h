@@ -22,6 +22,10 @@ struct AltTabEnumContext {
     std::wstring                    SearchString;
     AltTabWindowData                AltBacktickWndInfo;
     std::vector<std::wstring>       ProcessExclusionList;
+    // Most-recently-activated window order (0 = most recent). Captured on the
+    // UI thread so the worker can sort windows into Windows-Alt+Tab order
+    // without touching shared state.
+    std::vector<HWND>               ActivationMru;
 };
 
 /*!
@@ -35,6 +39,10 @@ AltTabEnumContext CaptureAltTabEnumContext();
  *        (search string + hotkey mode + exclusions). Thread-safe: does not
  *        read any globals.
  *
+ * The result is ordered most-recently-activated first (Windows Alt+Tab style),
+ * so the current window is row 0 and a plain Alt+Tab lands on the previous
+ * window. Untracked windows keep their Z-order at the end.
+ *
  * \return List of AltTab candidate windows.
  */
 std::vector<AltTabWindowData> EnumerateAltTabWindows(const AltTabEnumContext& context);
@@ -43,6 +51,33 @@ std::vector<AltTabWindowData> EnumerateAltTabWindows(const AltTabEnumContext& co
  * \brief Convenience wrapper (UI thread only): snapshot + enumerate.
  */
 std::vector<AltTabWindowData> GetAltTabWindows();
+
+/*!
+ * \brief Start tracking foreground-window changes (a WinEventHook) that feeds
+ *        the most-recently-used order used by EnumerateAltTabWindows.
+ *        Call after the message loop exists (events are delivered to it).
+ */
+void InitializeWindowsActivationTracking();
+
+/*!
+ * \brief Remove the foreground-tracking hook. Call at exit.
+ */
+void UninitializeWindowsActivationTracking();
+
+/*!
+ * \brief Move a window to the front of the most-recently-used list. Used after
+ *        AltTab itself activates a window, so the switch is deterministic even
+ *        while transient foreground events are being suppressed.
+ */
+void MoveWindowToActivationFront(HWND hWnd);
+
+/*!
+ * \brief Ignore foreground-change events for the given number of ms. AltTab
+ *        calls this right after completing a switch, because destroying the
+ *        switcher / restoring / minimizing can fire spurious activation events
+ *        that would otherwise shuffle the MRU order.
+ */
+void SuppressForegroundTrackingFor(DWORD milliseconds);
 
 /*!
  * \brief Get the top-most owner window of the given window.

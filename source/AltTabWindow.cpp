@@ -332,6 +332,14 @@ void DestroyAltTabWindow(const bool activate) {
 
     if (activate && hWnd && !IsHungAppWindowEx(hWnd)) {
         ActivateWindow(hWnd);
+
+        // Record the switch deterministically: destroying the switcher and the
+        // activation itself fire transient foreground events that would
+        // otherwise shuffle the MRU (a third window occasionally jumping to
+        // the top). Move the target to the front explicitly and ignore events
+        // for a short grace period.
+        MoveWindowToActivationFront(hWnd);
+        SuppressForegroundTrackingFor(300);
     }
 
     // Cleanup state.

@@ -12,6 +12,7 @@
 #include "SettingsDialog.h"
 #include "AutoStart.h"
 #include "AltTabSettings.h"
+#include "ProcessExplorer.h"
 #include "GlobalData.h"
 #include "CheckForUpdates.h"
 #include "version.h"
@@ -167,6 +168,11 @@ int APIENTRY wWinMain(
 
     g_KeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, LLKeyboardProc, hInstance, 0);
 
+    // Track foreground changes so the Alt+Tab list can be ordered
+    // most-recently-activated first, like Windows' own switcher. Its events
+    // are delivered to this thread's message loop.
+    InitializeWindowsActivationTracking();
+
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_ALTTAB));
 
     // Check for updates.
@@ -190,6 +196,9 @@ int APIENTRY wWinMain(
     // destruction of log4cpp's critical sections and crash on exit.
     AltTabListViewStopAsyncEnumeration();
     StopUpdateCheck();
+
+    // No more foreground events are needed once the message loop is gone.
+    UninitializeWindowsActivationTracking();
 
     if (g_KeyboardHook) {
         UnhookWindowsHookEx(g_KeyboardHook);

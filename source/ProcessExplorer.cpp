@@ -414,6 +414,106 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
 } // namespace
 
+namespace {
+
+// ----------------------------------------------------------------------------
+// Most-recently-used window tracking (Windows Alt+Tab ordering)
+//
+// A foreground WinEventHook keeps a most-recently-activated window list. It is
+// maintained on the UI thread (the events are delivered to its message loop)
+// and snapshotted into AltTabEnumContext, so the enumeration worker only ever
+// reads a copy.
+// ----------------------------------------------------------------------------
+HWINEVENTHOOK       g_activationHook = nullptr;
+std::vector<HWND>   g_activationMru;
+// Transient foreground events fired by our own switch (destroying the switcher,
+// restoring/minimizing, fallback activation tricks) must not reorder the MRU.
+ULONGLONG           g_foregroundIgnoredUntil = 0;
+
+void CALLBACK ActivationHookProc(
+    HWINEVENTHOOK /*hWinEventHook*/,
+    DWORD /*event*/,
+    HWND hWnd,
+    LONG /*idObject*/,
+    LONG /*idChild*/,
+    DWORD /*dwEventThread*/,
+    DWORD /*dwmsEventTime*/)
+{
+    // Ignore AltTab's own windows so they never skew the ranking, and skip the
+    // transient activations that follow a completed switch (see
+    // SuppressForegroundTrackingFor).
+    if (hWnd == nullptr || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd) {
+        return;
+    }
+    if (GetTickCount64() < g_foregroundIgnoredUntil) {
+        return;
+    }
+    // Only track real switchable windows (tooltips/IME/transient frames would
+    // otherwise pollute the order and occasionally pop to the top of the list).
+    if (!IsAltTabWindow(hWnd)) {
+        return;
+    }
+
+    auto it = std::find(g_activationMru.begin(), g_activationMru.end(), hWnd);
+    if (it != g_activationMru.end()) {
+        g_activationMru.erase(it);
+    }
+    g_activationMru.insert(g_activationMru.begin(), hWnd);
+    if (g_activationMru.size() > 64) {
+        g_activationMru.pop_back();
+    }
+}
+
+std::vector<HWND> GetActivationMruSnapshot() {
+    return g_activationMru;    // UI thread only (same thread that fills it)
+}
+
+} // namespace
+
+void InitializeWindowsActivationTracking() {
+    if (g_activationHook != nullptr) {
+        return;
+    }
+    g_activationHook = SetWinEventHook(
+        EVENT_SYSTEM_FOREGROUND,
+        EVENT_SYSTEM_FOREGROUND,
+        nullptr,
+        &ActivationHookProc,
+        0,
+        0,
+        WINEVENT_OUTOFCONTEXT);
+    if (g_activationHook == nullptr) {
+        AT_LOG_ERROR("Failed to install foreground tracking hook.");
+    }
+}
+
+void UninitializeWindowsActivationTracking() {
+    if (g_activationHook != nullptr) {
+        UnhookWinEvent(g_activationHook);
+        g_activationHook = nullptr;
+    }
+    g_activationMru.clear();
+    g_foregroundIgnoredUntil = 0;
+}
+
+void MoveWindowToActivationFront(HWND hWnd) {
+    if (hWnd == nullptr || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd || !IsAltTabWindow(hWnd)) {
+        return;
+    }
+    auto it = std::find(g_activationMru.begin(), g_activationMru.end(), hWnd);
+    if (it != g_activationMru.end()) {
+        g_activationMru.erase(it);
+    }
+    g_activationMru.insert(g_activationMru.begin(), hWnd);
+    if (g_activationMru.size() > 64) {
+        g_activationMru.pop_back();
+    }
+}
+
+void SuppressForegroundTrackingFor(DWORD milliseconds) {
+    g_foregroundIgnoredUntil = GetTickCount64() + milliseconds;
+}
+
 AltTabEnumContext CaptureAltTabEnumContext() {
     AltTabEnumContext context;
     context.IsAltTab                 = g_IsAltTab;
@@ -424,6 +524,7 @@ AltTabEnumContext CaptureAltTabEnumContext() {
     context.SearchString             = g_SearchString;
     context.AltBacktickWndInfo       = g_AltBacktickWndInfo;
     context.ProcessExclusionList     = g_Settings.ProcessExclusionList;
+    context.ActivationMru            = GetActivationMruSnapshot();
     return context;
 }
 
@@ -431,6 +532,27 @@ std::vector<AltTabWindowData> EnumerateAltTabWindows(const AltTabEnumContext& co
     std::vector<AltTabWindowData> altTabWindows;
     EnumPack pack{ &altTabWindows, &context };
     EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&pack));
+
+    // Order the candidates most-recently-activated first, matching Windows'
+    // own Alt+Tab: the current (most recent) window is row 0, so the default
+    // selection (row 1) is the previously active window and a plain Alt+Tab
+    // toggles between the two most recent ones. Untracked windows keep their
+    // Z-order at the tail (stable sort).
+    if (!context.ActivationMru.empty() && !altTabWindows.empty()) {
+        const size_t tail = context.ActivationMru.size();
+        auto rank = [&](const AltTabWindowData& window) -> size_t {
+            for (size_t i = 0; i < tail; ++i) {
+                if (context.ActivationMru[i] == window.hWnd) {
+                    return i;
+                }
+            }
+            return tail;
+        };
+        std::stable_sort(altTabWindows.begin(), altTabWindows.end(), [&](const AltTabWindowData& a, const AltTabWindowData& b) {
+            return rank(a) < rank(b);
+        });
+    }
+
     return altTabWindows;
 }
 
