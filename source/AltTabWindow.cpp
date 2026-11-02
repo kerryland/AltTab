@@ -349,12 +349,45 @@ void DestroyAltTabWindow(const bool activate) {
 // Activate a window of the given handle
 // ----------------------------------------------------------------------------
 
+// Whether the window covers its entire monitor (i.e. fullscreen, like FastStone
+// viewer's fullscreen mode). Such windows reclaim the foreground whenever the
+// mouse is over them, so switching away from one without minimizing it would
+// leave the chosen window unable to keep focus.
+static bool IsFullscreenWindow(HWND hWnd) {
+    if (IsIconic(hWnd) || !IsWindowVisible(hWnd)) {
+        return false;
+    }
+    RECT rcWnd;
+    if (!GetWindowRect(hWnd, &rcWnd)) {
+        return false;
+    }
+    HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { sizeof(MONITORINFO) };
+    if (!GetMonitorInfoW(hMonitor, &mi)) {
+        return false;
+    }
+    const int windowWidth = rcWnd.right - rcWnd.left;
+    const int windowHeight = rcWnd.bottom - rcWnd.top;
+    const int monitorWidth = mi.rcMonitor.right - mi.rcMonitor.left;
+    const int monitorHeight = mi.rcMonitor.bottom - mi.rcMonitor.top;
+    // Allow a few pixels of border/taskbar-less (borderless) fullscreen slack.
+    return windowWidth >= monitorWidth - 8 && windowHeight >= monitorHeight - 8;
+}
+
 void ActivateWindow(HWND hTargetWnd) {
     AT_LOG_TRACE;
 
     HWND hForegroundWnd = GetForegroundWindow();
     if (hTargetWnd == hForegroundWnd) {
         return;
+    }
+
+    // Switching away from a fullscreen window: minimize it the way the native
+    // switcher does, otherwise it steals the foreground right back as soon as
+    // the mouse moves over it.
+    if (hForegroundWnd && IsFullscreenWindow(hForegroundWnd)) {
+        AT_LOG_INFO("Minimizing fullscreen foreground window to allow the switch");
+        PostMessageW(hForegroundWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
     }
 
     if (IsIconic(hTargetWnd)) {
