@@ -58,12 +58,22 @@ const wchar_t* TT_SHOW_MOUSEOVER_ITEM          = LR"(Draw a rectangle around mou
 
 const wchar_t* TT_SHOW_DELETE_BUTTON           = LR"(Display delete button on mouse over hot-track item in AltTab window listview)";
 
-const wchar_t* TT_CHECK_PROCESS_EXCLUSIONS     = LR"(Enable/disable process exclusions)";
+const wchar_t* TT_CHECK_PROCESS_EXCLUSIONS     = LR"(Enable/disable hiding the configured processes from the AltTab list)";
 
-const wchar_t* TT_EDIT_PROCESS_EXCLUSIONS      = LR"(Process exclusion list:
+const wchar_t* TT_EDIT_PROCESS_EXCLUSIONS      = LR"(Hidden Process list:
 Process names are separated by forward slash (/).
 Example: notepad.exe/iexplore.exe
 )";
+
+const wchar_t* TT_MANAGE_EXCLUSIONS            = LR"(Pick the processes to hide from the AltTab list from the running-process list.)";
+
+const wchar_t* TT_EDIT_PASSTHROUGH             = LR"(Pass-through apps:
+Alt+Tab and Alt+Backtick are forwarded to these processes instead of opening
+AltTab's own switcher - useful for remote-desktop clients (RustDesk, mstsc,
+TeamViewer, ...) so the remote machine handles the key.
+)";
+
+const wchar_t* TT_MANAGE_PASSTHROUGH           = LR"(Pick the processes that should receive Alt+Tab / Alt+Backtick directly.)";
 
 const wchar_t* TT_RESET_SETTINGS               = LR"(Reset all settings to defaults)";
 

@@ -18,3 +18,21 @@
  * \return true if the user pressed OK (newValue holds the edited groups).
  */
 bool EditSimilarProcessGroups(HWND hOwner, const std::wstring& currentValue, std::wstring& newValue);
+
+/*!
+ * \brief Open the flat process-list picker (modal), used for the process
+ *        exclusions and pass-through apps settings. It shares the process
+ *        enumeration / add-remove engine with the groups editor above.
+ *
+ * \param hOwner       Owner window.
+ * \param currentValue Current '/'-separated process name list.
+ * \param caption      Dialog caption (e.g. "AltTab: Hidden Processes").
+ * \param[out] newValue Serialized '/'-separated list on OK; unchanged on Cancel.
+ *
+ * \return true if the user pressed OK (newValue holds the edited list).
+ */
+bool EditProcessList(
+    HWND hOwner,
+    const std::wstring& currentValue,
+    const std::wstring& caption,
+    std::wstring& newValue);

@@ -18,36 +18,12 @@ namespace {
 HWND g_hToolTip     = nullptr;
 
 // The "similar process groups" value is edited through the manager dialog
-// (IDD_SIMILARGROUPS), never by typing in the read-only preview edit control.
+// (IDD_SIMILARGROUPS); Hidden Processes / pass-through apps through the
+// shared picker dialog (EditProcessList). These hold the working values while
+// the settings dialog is open.
 std::wstring g_similarGroupsValue;
-
-// Render the pipe/slash groups value as one readable line per group for the
-// read-only preview edit.
-std::wstring FormatGroupsPreview(const std::wstring& value) {
-    std::wstring preview;
-    for (const std::wstring& groupStr : Split(value, L"|")) {
-        const auto members = Split(groupStr, L"/");
-        if (members.empty()) {
-            continue;
-        }
-        std::wstring line;
-        for (size_t i = 0; i < members.size(); ++i) {
-            if (i > 0) {
-                line += L", ";
-            }
-            line += members[i];
-        }
-        if (!preview.empty()) {
-            preview += L"\r\n";
-        }
-        preview += line;
-    }
-    return preview.empty() ? L"(none)" : preview;
-}
-
-void RefreshGroupsPreview(HWND hDlg) {
-    SetDlgItemTextW(hDlg, IDC_EDIT_SIMILAR_PROCESS_GROUPS, FormatGroupsPreview(g_similarGroupsValue).c_str());
-}
+std::wstring g_processExclusionsValue;
+std::wstring g_passThroughValue;
 
 #define BOOL_TO_CSTR(b) ((b) ? "true" : "false")
 
@@ -87,7 +63,7 @@ void AddTooltips(HWND hDlg) {
     ADD_TOOLTIP(IDC_CHECK_ALT_CTRL_TAB               , TT_HOTKEY_ALT_CTRL_TAB       );
     ADD_TOOLTIP(IDC_EDIT_SETTINGS_FILEPATH           , TT_SETTINGS_FILEPATH         );
     ADD_TOOLTIP(IDC_EDIT_SS_BANNER_TEXT              , TT_SHOW_SS_CUE_BANNER_TEXT   );
-    ADD_TOOLTIP(IDC_EDIT_SIMILAR_PROCESS_GROUPS      , TT_SIMILAR_PROCESS_GROUPS    );
+    ADD_TOOLTIP(IDC_BUTTON_MANAGE_GROUPS             , TT_SIMILAR_PROCESS_GROUPS    );
     ADD_TOOLTIP(IDC_EDIT_FUZZY_MATCH_PERCENT         , TT_FUZZY_MATCH_PERCENT       );
     ADD_TOOLTIP(IDC_STATIC_FUZZY_MATCH_PERCENT       , TT_FUZZY_MATCH_PERCENT       );
     ADD_TOOLTIP(IDC_EDIT_WINDOW_TRANSPARENCY         , TT_WINDOW_TRANSPARENCY       );
@@ -103,7 +79,10 @@ void AddTooltips(HWND hDlg) {
     ADD_TOOLTIP(IDC_CHECK_MH_SHOW_DELETE_BUTTON      , TT_SHOW_DELETE_BUTTON        );
     ADD_TOOLTIP(IDC_CHECK_FOR_UPDATES                , TT_CHECK_FOR_UPDATES         );
     ADD_TOOLTIP(IDC_CHECK_PROCESS_EXCLUSIONS         , TT_CHECK_PROCESS_EXCLUSIONS  );
-    ADD_TOOLTIP(IDC_EDIT_PROCESS_EXCLUSIONS          , TT_EDIT_PROCESS_EXCLUSIONS   );
+    ADD_TOOLTIP(IDC_BUTTON_MANAGE_EXCLUSIONS         , TT_MANAGE_EXCLUSIONS         );
+    ADD_TOOLTIP(IDC_STATIC_PASSTHROUGH_LABEL         , TT_EDIT_PASSTHROUGH          );
+    ADD_TOOLTIP(IDC_BUTTON_MANAGE_PASSTHROUGH        , TT_MANAGE_PASSTHROUGH        );
+    ADD_TOOLTIP(IDC_BUTTON_MANAGE_PASSTHROUGH        , TT_MANAGE_PASSTHROUGH        );
     ADD_TOOLTIP(IDC_BUTTON_APPLY                     , TT_APPLY_SETTINGS            );
     ADD_TOOLTIP(IDOK                                 , TT_OK_SETTINGS               );
     ADD_TOOLTIP(IDCANCEL                             , TT_CANCEL_SETTINGS           );
@@ -201,6 +180,8 @@ void ATLogSettings(const AltTabSettings& settings) {
     AT_LOG_DEBUG("[ProcessExclusions]");
     AT_LOG_DEBUG("  ProcessExclusionsEnabled  : [%s]", BOOL_TO_CSTR(settings.ProcessExclusionsEnabled));
     AT_LOG_DEBUG("  ProcessExclusions         : [%s]", WStrToUTF8(settings.ProcessExclusions).c_str());
+    AT_LOG_DEBUG("[PassThrough]");
+    AT_LOG_DEBUG("  PassThroughApps           : [%s]", WStrToUTF8(settings.PassThroughApps).c_str());
     AT_LOG_DEBUG("=== AltTab Settings End ===");
 #else
     (void)settings;
@@ -229,7 +210,8 @@ void ATReadSettingsFromUI(HWND hDlg, AltTabSettings& settings) {
     settings.ShowHighlightRect        = IsDlgButtonChecked(hDlg, IDC_CHECK_MH_SHOW_HIGHLIGHT_RECT) == BST_CHECKED;
     settings.ShowDeleteButton         = IsDlgButtonChecked(hDlg, IDC_CHECK_MH_SHOW_DELETE_BUTTON) == BST_CHECKED;
     settings.ProcessExclusionsEnabled = IsDlgButtonChecked(hDlg, IDC_CHECK_PROCESS_EXCLUSIONS) == BST_CHECKED;
-    settings.ProcessExclusions        = GetDlgItemTextEx(hDlg, IDC_EDIT_PROCESS_EXCLUSIONS);
+    settings.ProcessExclusions        = g_processExclusionsValue;
+    settings.PassThroughApps          = g_passThroughValue;
 
     const int selectedIndex = ComboBox_GetCurSel(GetDlgItem(hDlg, IDC_CHECK_FOR_UPDATES));
     const int index = max(selectedIndex, 0);
@@ -260,6 +242,7 @@ bool AreSettingsModified(HWND hDlg) {
         || settings.HKAltCtrlTabEnabled      != g_Settings.HKAltCtrlTabEnabled
         || settings.ProcessExclusionsEnabled != g_Settings.ProcessExclusionsEnabled
         || settings.ProcessExclusions        != g_Settings.ProcessExclusions
+        || settings.PassThroughApps           != g_Settings.PassThroughApps
         || settings.SimilarProcessGroups     != g_Settings.SimilarProcessGroups
         || settings.SSCueBannerText          != g_Settings.SSCueBannerText
         || settings.ShowProcessInfoTooltip   != g_Settings.ShowProcessInfoTooltip
@@ -305,22 +288,11 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     SetDlgItemText(hDlg, IDC_EDIT_SETTINGS_FILEPATH, ATSettingsFilePath().c_str());
     SetDlgItemText(hDlg, IDC_EDIT_SS_BANNER_TEXT, settings.SSCueBannerText.c_str());
 
-    // Similar process groups are managed through IDD_SIMILARGROUPS; the edit
-    // control only previews the current value in a human-readable form.
-    g_similarGroupsValue = settings.SimilarProcessGroups;
-    RefreshGroupsPreview(hDlg);
-
-    // Monospace font for the process group / exclusion editors.
-    LOGFONTW lfMonospace = {};
-    lfMonospace.lfHeight       = -MulDiv(14, 96, 72);
-    lfMonospace.lfWeight       = FW_NORMAL;
-    lfMonospace.lfCharSet      = DEFAULT_CHARSET;
-    lfMonospace.lfPitchAndFamily = DEFAULT_PITCH | FF_SWISS;
-    wcscpy_s(lfMonospace.lfFaceName, LF_FACESIZE, L"Lucida Console");
-    HFONT hFont = GetDialogFont(hDlg, PROP_EDIT_FONT, lfMonospace);
-
-    SendMessageW(GetDlgItem(hDlg, IDC_EDIT_SIMILAR_PROCESS_GROUPS), WM_SETFONT, (WPARAM)hFont, TRUE);
-    SendMessageW(GetDlgItem(hDlg, IDC_EDIT_PROCESS_EXCLUSIONS), WM_SETFONT, (WPARAM)hFont, TRUE);
+    // The three process-list settings are edited through their manager dialogs;
+    // hold the working values here while the dialog is open.
+    g_similarGroupsValue     = settings.SimilarProcessGroups;
+    g_processExclusionsValue = settings.ProcessExclusions;
+    g_passThroughValue       = settings.PassThroughApps;
 
     CheckDlgButton(hDlg, IDC_CHECK_ALT_TAB, settings.HKAltTabEnabled ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hDlg, IDC_CHECK_ALT_BACKTICK, settings.HKAltBacktickEnabled ? BST_CHECKED : BST_UNCHECKED);
@@ -336,7 +308,7 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     CheckDlgButton(hDlg, IDC_CHECK_MH_SHOW_HIGHLIGHT_RECT, settings.ShowHighlightRect ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hDlg, IDC_CHECK_MH_SHOW_DELETE_BUTTON, settings.ShowDeleteButton ? BST_CHECKED : BST_UNCHECKED);
 
-    EnableWindow(GetDlgItem(hDlg, IDC_EDIT_PROCESS_EXCLUSIONS), settings.ProcessExclusionsEnabled);
+    EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_MANAGE_EXCLUSIONS), settings.ProcessExclusionsEnabled);
 
     SetDlgItemInt(hDlg, IDC_EDIT_FUZZY_MATCH_PERCENT, settings.FuzzyMatchPercent, FALSE);
     SendDlgItemMessage(hDlg, IDC_SPIN_FUZZY_MATCH_PERCENT, UDM_SETRANGE, 0, MAKELPARAM(100, 0));
@@ -353,8 +325,6 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     SetDlgItemInt(hDlg, IDC_EDIT_WINDOW_HEIGHT_PERCENTAGE, settings.HeightPercentage, FALSE);
     SendDlgItemMessage(hDlg, IDC_SPIN_WINDOW_HEIGHT_PERCENTAGE, UDM_SETRANGE, 0, MAKELPARAM(90, 10));
     SendDlgItemMessage(hDlg, IDC_SPIN_WINDOW_HEIGHT_PERCENTAGE, UDM_SETPOS, 0, MAKELPARAM(settings.HeightPercentage, 0));
-
-    SetDlgItemText(hDlg, IDC_EDIT_PROCESS_EXCLUSIONS, settings.ProcessExclusions.c_str());
 
     // CheckForUpdates combo (reset content on re-init to avoid duplicates).
     HWND hComboBox = GetDlgItem(hDlg, IDC_CHECK_FOR_UPDATES);
@@ -401,6 +371,7 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     SendMessageW(GetDlgItem(hDlg, IDC_GROUPBOX_MOUSEHOVER), WM_SETFONT, (WPARAM)hBoldFont, TRUE);
     SendMessageW(GetDlgItem(hDlg, IDC_GROUPBOX_BACKTICK), WM_SETFONT, (WPARAM)hBoldFont, TRUE);
     SendMessageW(GetDlgItem(hDlg, IDC_GROUPBOX_PROCESS_EXCLUSIONS), WM_SETFONT, (WPARAM)hBoldFont, TRUE);
+    SendMessageW(GetDlgItem(hDlg, IDC_GROUPBOX_PASSTHROUGH), WM_SETFONT, (WPARAM)hBoldFont, TRUE);
 }
 
 } // namespace
@@ -418,16 +389,6 @@ INT_PTR CALLBACK ATSettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
         ATSettingsInitDialog(hDlg, g_Settings);
         AddTooltips(hDlg);
         return (INT_PTR)TRUE;
-    }
-
-    case WM_CTLCOLOREDIT: {
-        const HDC hdcEdit = (HDC)wParam;
-        const HWND hEdit = (HWND)lParam;
-        const int id = GetDlgCtrlID(hEdit);
-        if (id == IDC_EDIT_SIMILAR_PROCESS_GROUPS || id == IDC_EDIT_PROCESS_EXCLUSIONS) {
-            SetTextColor(hdcEdit, RGB(0, 0, 255)); // blue text
-        }
-        return (INT_PTR)GetSysColorBrush(COLOR_WINDOW);
     }
 
     case WM_COMMAND: {
@@ -497,7 +458,38 @@ INT_PTR CALLBACK ATSettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
             if (EditSimilarProcessGroups(hDlg, g_similarGroupsValue, newValue) && newValue != g_similarGroupsValue) {
                 AT_LOG_INFO("IDC_BUTTON_MANAGE_GROUPS: similar process groups updated");
                 g_similarGroupsValue = newValue;
-                RefreshGroupsPreview(hDlg);
+                EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_APPLY), AreSettingsModified(hDlg));
+            }
+            return (INT_PTR)TRUE;
+        }
+
+        if (commandId == IDC_BUTTON_MANAGE_EXCLUSIONS) {
+            AT_LOG_INFO("IDC_BUTTON_MANAGE_EXCLUSIONS Pressed!");
+
+            std::wstring newValue;
+            if (EditProcessList(
+                    hDlg,
+                    g_processExclusionsValue,
+                    L"AltTab: Hidden Processes",
+                    newValue)
+                && newValue != g_processExclusionsValue) {
+                g_processExclusionsValue = newValue;
+                EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_APPLY), AreSettingsModified(hDlg));
+            }
+            return (INT_PTR)TRUE;
+        }
+
+        if (commandId == IDC_BUTTON_MANAGE_PASSTHROUGH) {
+            AT_LOG_INFO("IDC_BUTTON_MANAGE_PASSTHROUGH Pressed!");
+
+            std::wstring newValue;
+            if (EditProcessList(
+                    hDlg,
+                    g_passThroughValue,
+                    L"AltTab: Pass-through Apps",
+                    newValue)
+                && newValue != g_passThroughValue) {
+                g_passThroughValue = newValue;
                 EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_APPLY), AreSettingsModified(hDlg));
             }
             return (INT_PTR)TRUE;
@@ -506,7 +498,7 @@ INT_PTR CALLBACK ATSettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
         if (commandId == IDC_CHECK_PROCESS_EXCLUSIONS) {
             AT_LOG_INFO("IDC_CHECK_PROCESS_EXCLUSIONS Clicked!");
             const bool isChecked = IsDlgButtonChecked(hDlg, IDC_CHECK_PROCESS_EXCLUSIONS) == BST_CHECKED;
-            EnableWindow(GetDlgItem(hDlg, IDC_EDIT_PROCESS_EXCLUSIONS), isChecked);
+            EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_MANAGE_EXCLUSIONS), isChecked);
             return (INT_PTR)TRUE;
         }
     }

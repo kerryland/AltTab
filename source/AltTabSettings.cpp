@@ -27,6 +27,7 @@ const wchar_t* HOTKEYS                   = L"Hotkeys"                 ;
 const wchar_t* MOUSE_HOVER               = L"MouseHover"              ;
 const wchar_t* BACKTICK                  = L"Backtick"                ;
 const wchar_t* PROCESS_EXCLUSIONS        = L"ProcessExclusions"       ;
+const wchar_t* PASS_THROUGH              = L"PassThrough"             ;
 
 // INI keys
 const wchar_t* CUE_BANNER_TEXT           = L"CueBannerText"           ;
@@ -75,6 +76,9 @@ void BuildProcessLists(AltTabSettings& settings) {
 
     settings.ProcessExclusionList.clear();
     settings.ProcessExclusionList = Split(ToLower(settings.ProcessExclusions), L"/");
+
+    settings.PassThroughAppList.clear();
+    settings.PassThroughAppList = Split(ToLower(settings.PassThroughApps), L"/");
 }
 
 // Convert COLORREF to a 0xRRGGBB string.
@@ -197,6 +201,7 @@ void AltTabSettings::Reset() {
     SystemTrayIconEnabled      = DEFAULT_SYSTEM_TRAY_ICON_ENABLED   ;
     ProcessExclusionsEnabled   = DEFAULT_PROCESS_EXCLUSIONS_ENABLED ;
     ProcessExclusions          = DEFAULT_PROCESS_EXCLUSIONS         ;
+    PassThroughApps            = DEFAULT_PASS_THROUGH_APPS          ;
 
     BuildProcessLists(*this);
 
@@ -244,14 +249,26 @@ std::pair<std::wstring, std::wstring> AltTabSettings::IsValid(bool& valid) {
         }
     }
 
-    // Validate the process exclusion list.
+    // Validate the hidden processes list.
     const auto excludeProcessNames = Split(ProcessExclusions, L"/");
     for (const auto& processName : excludeProcessNames) {
         if (!std::regex_match(processName, pattern)) {
             valid = false;
             return {
-                L"Invalid Process Exclusions",
-                std::format(L"Invalid process name [{}] in Process Exclusions, please verify...", processName)
+                L"Invalid Hidden Processes",
+                std::format(L"Invalid process name [{}] in Hidden Processes, please verify...", processName)
+            };
+        }
+    }
+
+    // Validate the pass-through list.
+    const auto passThroughProcessNames = Split(PassThroughApps, L"/");
+    for (const auto& processName : passThroughProcessNames) {
+        if (!std::regex_match(processName, pattern)) {
+            valid = false;
+            return {
+                L"Invalid Pass-through Apps",
+                std::format(L"Invalid process name [{}] in Pass-through Apps, please verify...", processName)
             };
         }
     }
@@ -377,6 +394,8 @@ void ATSettingsToFile(const std::wstring& iniFile) {
 
     WriteSetting(iniFile, PROCESS_EXCLUSIONS, ENABLED, g_Settings.ProcessExclusionsEnabled);
     WriteSetting(iniFile, PROCESS_EXCLUSIONS, PROCESS_LIST, g_Settings.ProcessExclusions);
+
+    WriteSetting(iniFile, PASS_THROUGH, PROCESS_LIST, g_Settings.PassThroughApps);
 }
 
 void ATLoadSettings() {
@@ -437,6 +456,8 @@ void ATLoadSettings() {
 
     ReadSetting(iniFile, PROCESS_EXCLUSIONS, ENABLED, DEFAULT_PROCESS_EXCLUSIONS_ENABLED, g_Settings.ProcessExclusionsEnabled);
     ReadSetting(iniFile, PROCESS_EXCLUSIONS, PROCESS_LIST, DEFAULT_PROCESS_EXCLUSIONS, g_Settings.ProcessExclusions);
+
+    ReadSetting(iniFile, PASS_THROUGH, PROCESS_LIST, DEFAULT_PASS_THROUGH_APPS, g_Settings.PassThroughApps);
 
     // Convert stored 0xRRGGBB colors to COLORREF.
     g_Settings.SSFontColor = RGBIntToColorRef(SSFontColor);

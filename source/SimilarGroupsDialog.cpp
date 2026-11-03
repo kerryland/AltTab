@@ -15,6 +15,7 @@ namespace {
 std::vector<std::vector<std::wstring>> g_groups;   // group index -> member process names
 std::vector<std::wstring>              g_available; // processes not assigned to any group
 std::wstring                           g_result;    // serialized groups on OK
+std::wstring                           g_caption;   // flat-list dialog caption
 
 bool CaseInsensitiveLess(const std::wstring& a, const std::wstring& b) {
     return ToLower(a) < ToLower(b);
@@ -72,6 +73,66 @@ std::wstring SerializeGroups() {
     return result;
 }
 
+// Flat lists (Hidden Processes / pass-through apps) are stored as a single
+// '/'-separated list; internally they are modelled as one group so the same
+// picker engine can be reused.
+void ParseFlat(const std::wstring& value) {
+    g_groups.clear();
+    std::vector<std::wstring> members;
+    for (const std::wstring& name : Split(value, L"/")) {
+        const bool duplicate = std::any_of(members.begin(), members.end(), [&](const std::wstring& m) {
+            return EqualsIgnoreCase(m, name);
+        });
+        if (!name.empty() && !duplicate) {
+            members.push_back(name);
+        }
+    }
+    SortMembers(members);
+    g_groups.push_back(std::move(members));
+}
+
+std::wstring SerializeFlat() {
+    std::wstring result;
+    if (!g_groups.empty()) {
+        const std::vector<std::wstring>& members = g_groups[0];
+        for (size_t i = 0; i < members.size(); ++i) {
+            if (i > 0) {
+                result += L'/';
+            }
+            result += members[i];
+        }
+    }
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Shared model operations (used by both the grouped and the flat picker)
+// ----------------------------------------------------------------------------
+
+void MoveAvailableIntoGroup(int availableRow, int group) {
+    if (availableRow < 0 || availableRow >= (int)g_available.size()) {
+        return;
+    }
+    if (group < 0 || group >= (int)g_groups.size()) {
+        return;
+    }
+    g_groups[group].push_back(g_available[availableRow]);
+    SortMembers(g_groups[group]);
+    g_available.erase(g_available.begin() + availableRow);
+}
+
+void MoveMemberToAvailable(int group, int memberRow) {
+    if (group < 0 || group >= (int)g_groups.size()) {
+        return;
+    }
+    if (memberRow < 0 || memberRow >= (int)g_groups[group].size()) {
+        return;
+    }
+    g_available.push_back(g_groups[group][memberRow]);
+    SortMembers(g_available);
+    g_groups[group].erase(g_groups[group].begin() + memberRow);
+}
+
 // Build the pool of processes that are not assigned to any group yet: every
 // process with a switchable window right now, plus every process already
 // configured (so a member that was removed can be re-added even when it is not
@@ -117,14 +178,13 @@ int GetSelectedRow(HWND hListView) {
     return (int)SendMessageW(hListView, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
 }
 
-void InitListView(HWND hListView, const wchar_t* header) {
+void InitListView(HWND hListView) {
     ListView_SetExtendedListViewStyle(hListView, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     RECT rc = {};
     GetClientRect(hListView, &rc);
     LVCOLUMN column = {};
-    column.mask    = LVCF_TEXT | LVCF_WIDTH;
-    column.cx      = max(rc.right - rc.left - 4, 50);
-    column.pszText = const_cast<wchar_t*>(header);
+    column.mask = LVCF_WIDTH;
+    column.cx   = max(rc.right - rc.left - 4, 50);
     ListView_InsertColumn(hListView, 0, &column);
 }
 
@@ -222,16 +282,13 @@ void AddSelectedProcess(HWND hDlg) {
         return;
     }
 
-    const std::wstring name = g_available[available];
     int group = GetSelectedRow(GetDlgItem(hDlg, IDC_LISTV_GROUPS));
     if (group < 0) {
         g_groups.push_back({});
         group = (int)g_groups.size() - 1;
     }
 
-    g_groups[group].push_back(name);
-    SortMembers(g_groups[group]);
-    g_available.erase(g_available.begin() + available);
+    MoveAvailableIntoGroup(available, group);
 
     RefreshAll(hDlg);
     SelectGroup(hDlg, group);
@@ -249,9 +306,7 @@ void RemoveSelectedMember(HWND hDlg) {
         return;
     }
 
-    g_available.push_back(g_groups[group][member]);
-    std::sort(g_available.begin(), g_available.end(), CaseInsensitiveLess);
-    g_groups[group].erase(g_groups[group].begin() + member);
+    MoveMemberToAvailable(group, member);
 
     RefreshAll(hDlg);
 
@@ -288,6 +343,59 @@ void DeleteSelectedGroup(HWND hDlg) {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Flat list picker helpers (Hidden Processes / pass-through apps)
+// ----------------------------------------------------------------------------
+
+void UpdateFlatButtons(HWND hDlg) {
+    const bool hasAvailable = GetSelectedRow(GetDlgItem(hDlg, IDC_LISTV_AVAILABLE_PROCESSES)) >= 0;
+    const bool hasSelected  = GetSelectedRow(GetDlgItem(hDlg, IDC_LISTV_SELECTED_PROCESSES)) >= 0;
+    EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_ADD_PROCESS), hasAvailable);
+    EnableWindow(GetDlgItem(hDlg, IDC_BUTTON_REMOVE_PROCESS), hasSelected);
+}
+
+void RefreshFlatSelected(HWND hDlg) {
+    HWND hListView = GetDlgItem(hDlg, IDC_LISTV_SELECTED_PROCESSES);
+    ListView_DeleteAllItems(hListView);
+
+    if (!g_groups.empty()) {
+        for (int i = 0; i < (int)g_groups[0].size(); ++i) {
+            LVITEM item  = {};
+            item.mask    = LVIF_TEXT;
+            item.iItem   = i;
+            item.pszText = const_cast<wchar_t*>(g_groups[0][i].c_str());
+            ListView_InsertItem(hListView, &item);
+        }
+    }
+}
+
+void RefreshFlatAll(HWND hDlg) {
+    RefreshFlatSelected(hDlg);
+    RefreshAvailableList(hDlg);
+    UpdateFlatButtons(hDlg);
+}
+
+void FlatAddSelected(HWND hDlg) {
+    const int available = GetSelectedRow(GetDlgItem(hDlg, IDC_LISTV_AVAILABLE_PROCESSES));
+    if (available < 0) {
+        return;
+    }
+    if (g_groups.empty()) {
+        g_groups.push_back({});
+    }
+    MoveAvailableIntoGroup(available, 0);
+    RefreshFlatAll(hDlg);
+}
+
+void FlatRemoveSelected(HWND hDlg) {
+    const int member = GetSelectedRow(GetDlgItem(hDlg, IDC_LISTV_SELECTED_PROCESSES));
+    if (member < 0) {
+        return;
+    }
+    MoveMemberToAvailable(0, member);
+    RefreshFlatAll(hDlg);
+}
+
 } // namespace
 
 // ----------------------------------------------------------------------------
@@ -301,9 +409,9 @@ INT_PTR CALLBACK ATSimilarGroupsDlgProc(HWND hDlg, UINT message, WPARAM wParam, 
         SendMessageW(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         SendMessageW(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
 
-        InitListView(GetDlgItem(hDlg, IDC_LISTV_GROUPS), L"Processes");
-        InitListView(GetDlgItem(hDlg, IDC_LISTV_GROUP_MEMBERS), L"Members");
-        InitListView(GetDlgItem(hDlg, IDC_LISTV_AVAILABLE_PROCESSES), L"Process Name");
+        InitListView(GetDlgItem(hDlg, IDC_LISTV_GROUPS));
+        InitListView(GetDlgItem(hDlg, IDC_LISTV_GROUP_MEMBERS));
+        InitListView(GetDlgItem(hDlg, IDC_LISTV_AVAILABLE_PROCESSES));
         RefreshAll(hDlg);
         return (INT_PTR)TRUE;
     }
@@ -407,6 +515,102 @@ bool EditSimilarProcessGroups(HWND hOwner, const std::wstring& currentValue, std
     g_result.clear();
 
     const INT_PTR result = DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_SIMILARGROUPS), hOwner, ATSimilarGroupsDlgProc);
+    if (result == IDOK) {
+        newValue = g_result;
+        return true;
+    }
+    return false;
+}
+
+// ----------------------------------------------------------------------------
+// Flat list dialog (Hidden Processes / pass-through apps)
+// ----------------------------------------------------------------------------
+
+INT_PTR CALLBACK ATProcessListDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+    case WM_INITDIALOG: {
+        HICON hIcon = LoadIcon(g_hInstance, MAKEINTRESOURCE(IDI_ALTTAB));
+        SendMessageW(hDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        SendMessageW(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+
+        if (!g_caption.empty()) {
+            SetWindowTextW(hDlg, g_caption.c_str());
+        }
+
+        InitListView(GetDlgItem(hDlg, IDC_LISTV_SELECTED_PROCESSES));
+        InitListView(GetDlgItem(hDlg, IDC_LISTV_AVAILABLE_PROCESSES));
+        RefreshFlatAll(hDlg);
+        return (INT_PTR)TRUE;
+    }
+
+    case WM_NOTIFY: {
+        const NMHDR* pnmhdr = reinterpret_cast<NMHDR*>(lParam);
+        if (pnmhdr->code == LVN_ITEMCHANGED) {
+            const auto* pnmListView = reinterpret_cast<const NMLISTVIEW*>(lParam);
+            const bool selectionChanged =
+                (pnmListView->uNewState & LVIS_SELECTED) != (pnmListView->uOldState & LVIS_SELECTED);
+            if (selectionChanged) {
+                UpdateFlatButtons(hDlg);
+            }
+        } else if (pnmhdr->code == LVN_KEYDOWN) {
+            const auto* pnmKey = reinterpret_cast<const NMLVKEYDOWN*>(lParam);
+            if (pnmKey->wVKey == VK_DELETE && pnmhdr->idFrom == IDC_LISTV_SELECTED_PROCESSES) {
+                FlatRemoveSelected(hDlg);
+            }
+        }
+        return 0;
+    }
+
+    case WM_COMMAND: {
+        switch (LOWORD(wParam)) {
+        case IDC_BUTTON_ADD_PROCESS:
+            FlatAddSelected(hDlg);
+            return (INT_PTR)TRUE;
+
+        case IDC_BUTTON_REMOVE_PROCESS:
+            FlatRemoveSelected(hDlg);
+            return (INT_PTR)TRUE;
+
+        case IDC_BUTTON_REFRESH_PROCESSES:
+            BuildAvailableProcesses();
+            RefreshAvailableList(hDlg);
+            UpdateFlatButtons(hDlg);
+            return (INT_PTR)TRUE;
+
+        case IDOK:
+            g_result = SerializeFlat();
+            EndDialog(hDlg, IDOK);
+            return (INT_PTR)TRUE;
+
+        case IDCANCEL:
+            EndDialog(hDlg, IDCANCEL);
+            return (INT_PTR)TRUE;
+        }
+    }
+    break;
+
+    case WM_DESTROY: {
+        DestroyIcon((HICON)SendMessageW(hDlg, WM_GETICON, ICON_SMALL, 0));
+        DestroyIcon((HICON)SendMessageW(hDlg, WM_GETICON, ICON_BIG, 0));
+    }
+    break;
+    }
+
+    return (INT_PTR)FALSE;
+}
+
+bool EditProcessList(
+    HWND hOwner,
+    const std::wstring& currentValue,
+    const std::wstring& caption,
+    std::wstring& newValue)
+{
+    ParseFlat(currentValue);
+    BuildAvailableProcesses();
+    g_result.clear();
+    g_caption = caption;
+
+    const INT_PTR result = DialogBoxW(g_hInstance, MAKEINTRESOURCE(IDD_PROCESSLIST), hOwner, ATProcessListDlgProc);
     if (result == IDOK) {
         newValue = g_result;
         return true;

@@ -310,6 +310,35 @@ BOOL AddNotificationIcon(HWND hWndTrayIcon) {
 }
 
 // ----------------------------------------------------------------------------
+// Pass-through apps
+//
+// Alt+Tab / Alt+Backtick are forwarded to these processes (configured in the
+// [PassThrough] INI section) instead of opening the local switcher. This is
+// what lets remote-desktop clients (RustDesk, mstsc, ...) deliver the key to
+// the machine they control.
+// ----------------------------------------------------------------------------
+namespace {
+
+bool IsPassThroughProcess(const std::wstring& processName) {
+    for (const std::wstring& passThrough : g_Settings.PassThroughAppList) {
+        if (EqualsIgnoreCase(passThrough, processName)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsForegroundPassThroughApp() {
+    const HWND hForeground = GetForegroundWindow();
+    if (hForeground == nullptr) {
+        return false;
+    }
+    return IsPassThroughProcess(GetProcessNameFromWindow(hForeground));
+}
+
+} // namespace
+
+// ----------------------------------------------------------------------------
 // Low level keyboard hook
 //
 // nCode < 0              -> must return CallNextHookEx.
@@ -337,6 +366,15 @@ LRESULT CALLBACK LLKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // to the shell's own switcher so the user can return to the settings page
     // (it has a taskbar button via WS_EX_APPWINDOW) instead of being trapped.
     if (g_hSettingsWnd != nullptr) {
+        return CallNextHookEx(g_KeyboardHook, nCode, wParam, lParam);
+    }
+
+    // While a pass-through app (typically a remote-desktop client) is the
+    // foreground window, let the switcher hotkeys through to it so the remote
+    // machine handles them, rather than AltTab popping its local switcher.
+    if (g_hAltTabWnd == nullptr && altKeyDown && (vkCode == VK_TAB || vkCode == g_Settings.HKBacktickKey)
+        && IsForegroundPassThroughApp()) {
+        AT_LOG_DEBUG("Pass-through app in foreground; passing hotkey through.");
         return CallNextHookEx(g_KeyboardHook, nCode, wParam, lParam);
     }
 

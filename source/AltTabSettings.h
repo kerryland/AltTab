@@ -53,6 +53,9 @@ using StringList           = std::vector<std::wstring>;
 #define DEFAULT_PROCESS_EXCLUSIONS_ENABLED   false
 #define DEFAULT_PROCESS_EXCLUSIONS           L""
 #define DEFAULT_SHOW_WINDOW_PREVIEW          true
+// Processes whose Alt+Tab/Alt+Backtick must be forwarded to them instead of
+// being handled locally - typically remote-desktop clients. '/' separated.
+#define DEFAULT_PASS_THROUGH_APPS            L"rustdesk.exe/mstsc.exe/teamviewer.exe/teamviewerhost.exe/tv_w32.exe/tv_x64.exe/anydesk.exe/parsec.exe/parsecd.exe/vncviewer.exe/winvnc.exe/tvnserver.exe/quickassist.exe/remoting_host.exe/chrome-remote-desktop-host.exe/sragent.exe"
 
 /*!
  * \brief AltTab application settings
@@ -117,9 +120,14 @@ struct AltTabSettings {
     // ----------------------------------------------------------------------------
     // Backtick Settings
     // ----------------------------------------------------------------------------
-    bool                   ProcessExclusionsEnabled;   // Process exclusions enabled
-    std::wstring           ProcessExclusions;          // Process exclusions string which are separated by /
-    ProcessExclusionList   ProcessExclusionList;       // Process exclusions list, built at runtime
+    bool                   ProcessExclusionsEnabled;   // Hidden Processes enabled
+    std::wstring           ProcessExclusions;          // Hidden Processes string which are separated by /
+    ProcessExclusionList   ProcessExclusionList;       // Hidden Processes list, built at runtime
+    // ----------------------------------------------------------------------------
+    // Pass-through Settings (forward Alt+Tab/Alt+Backtick to these processes)
+    // ----------------------------------------------------------------------------
+    std::wstring           PassThroughApps;            // Process names separated by /
+    StringList             PassThroughAppList;         // Pass-through list, built at runtime
     // ----------------------------------------------------------------------------
     // Other Settings
     // ----------------------------------------------------------------------------
