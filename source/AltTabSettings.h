@@ -52,6 +52,7 @@ using StringList           = std::vector<std::wstring>;
 #define DEFAULT_SYSTEM_TRAY_ICON_ENABLED     true
 #define DEFAULT_PROCESS_EXCLUSIONS_ENABLED   false
 #define DEFAULT_PROCESS_EXCLUSIONS           L""
+#define DEFAULT_SHOW_WINDOW_PREVIEW          true
 
 /*!
  * \brief AltTab application settings
@@ -105,6 +106,7 @@ struct AltTabSettings {
     bool                   ShowSearchString;           // Show search string
     bool                   ShowColHeader;              // Show column header
     bool                   ShowColProcessName;         // Show column - Process Name
+    bool                   ShowWindowPreview;          // Show preview of the selected window
     bool                   SystemTrayIconEnabled;      // Create system tray icon if enabled is true
     // ----------------------------------------------------------------------------
     // MouseHover Settings

@@ -48,6 +48,10 @@ const wchar_t* TT_SHOW_COLUMN_HEADER           = LR"(Show/hide column header of 
 
 const wchar_t* TT_SHOW_COLUMN_PROCESS_NAME     = LR"(Show/hide process name column in AltTab window listview)";
 
+const wchar_t* TT_SHOW_WINDOW_PREVIEW          = LR"(Show a preview of the currently selected window in a panel at the right side of the AltTab window.
+
+The preview is captured on a background worker thread so it does not slow down switching.)";
+
 const wchar_t* TT_SHOW_PROCESSINFO_TOOLTIP     = LR"(Show process information (Path & PID) tooltip in AltTab window listview)";
 
 const wchar_t* TT_SHOW_MOUSEOVER_ITEM          = LR"(Draw a rectangle around mouse over hot-track item in AltTab window listview)";

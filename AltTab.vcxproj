@@ -226,6 +226,7 @@
     <ClCompile Include="source\SettingsDialog.cpp" />
     <ClCompile Include="source\SimilarGroupsDialog.cpp" />
     <ClCompile Include="source\Utils.cpp" />
+    <ClCompile Include="source\WindowPreview.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
@@ -259,6 +260,7 @@
     <ClInclude Include="source\Tooltips.h" />
     <ClInclude Include="source\Utils.h" />
     <ClInclude Include="source\version.h" />
+    <ClInclude Include="source\WindowPreview.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="source\res\AltTab.ico" />

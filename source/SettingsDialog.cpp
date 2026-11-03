@@ -97,6 +97,7 @@ void AddTooltips(HWND hDlg) {
     ADD_TOOLTIP(IDC_CHECK_SHOW_SEARCH_STRING         , TT_SHOW_SEARCH_STRING        );
     ADD_TOOLTIP(IDC_CHECK_SHOW_COL_HEADER            , TT_SHOW_COLUMN_HEADER        );
     ADD_TOOLTIP(IDC_CHECK_SHOW_COL_PROCESSNAME       , TT_SHOW_COLUMN_PROCESS_NAME  );
+    ADD_TOOLTIP(IDC_CHECK_SHOW_WINDOW_PREVIEW        , TT_SHOW_WINDOW_PREVIEW       );
     ADD_TOOLTIP(IDC_CHECK_MH_SHOW_PROCESSINFO_TOOLTIP, TT_SHOW_PROCESSINFO_TOOLTIP  );
     ADD_TOOLTIP(IDC_CHECK_MH_SHOW_HIGHLIGHT_RECT     , TT_SHOW_MOUSEOVER_ITEM       );
     ADD_TOOLTIP(IDC_CHECK_MH_SHOW_DELETE_BUTTON      , TT_SHOW_DELETE_BUTTON        );
@@ -190,6 +191,7 @@ void ATLogSettings(const AltTabSettings& settings) {
     AT_LOG_DEBUG("  ShowSearchString          : [%s]", BOOL_TO_CSTR(settings.ShowSearchString));
     AT_LOG_DEBUG("  ShowColHeader             : [%s]", BOOL_TO_CSTR(settings.ShowColHeader));
     AT_LOG_DEBUG("  ShowColProcessName        : [%s]", BOOL_TO_CSTR(settings.ShowColProcessName));
+    AT_LOG_DEBUG("  ShowWindowPreview         : [%s]", BOOL_TO_CSTR(settings.ShowWindowPreview));
     AT_LOG_DEBUG("[MouseHover]");
     AT_LOG_DEBUG("  ShowProcessInfoTooltip    : [%s]", BOOL_TO_CSTR(settings.ShowProcessInfoTooltip));
     AT_LOG_DEBUG("  ShowHighlightRect         : [%s]", BOOL_TO_CSTR(settings.ShowHighlightRect));
@@ -219,6 +221,7 @@ void ATReadSettingsFromUI(HWND hDlg, AltTabSettings& settings) {
     settings.ShowSearchString         = IsDlgButtonChecked(hDlg, IDC_CHECK_SHOW_SEARCH_STRING) == BST_CHECKED;
     settings.ShowColHeader            = IsDlgButtonChecked(hDlg, IDC_CHECK_SHOW_COL_HEADER) == BST_CHECKED;
     settings.ShowColProcessName       = IsDlgButtonChecked(hDlg, IDC_CHECK_SHOW_COL_PROCESSNAME) == BST_CHECKED;
+    settings.ShowWindowPreview        = IsDlgButtonChecked(hDlg, IDC_CHECK_SHOW_WINDOW_PREVIEW) == BST_CHECKED;
     settings.HKAltTabEnabled          = IsDlgButtonChecked(hDlg, IDC_CHECK_ALT_TAB) == BST_CHECKED;
     settings.HKAltBacktickEnabled     = IsDlgButtonChecked(hDlg, IDC_CHECK_ALT_BACKTICK) == BST_CHECKED;
     settings.HKAltCtrlTabEnabled      = IsDlgButtonChecked(hDlg, IDC_CHECK_ALT_CTRL_TAB) == BST_CHECKED;
@@ -251,6 +254,7 @@ bool AreSettingsModified(HWND hDlg) {
         || settings.ShowSearchString         != g_Settings.ShowSearchString
         || settings.ShowColHeader            != g_Settings.ShowColHeader
         || settings.ShowColProcessName       != g_Settings.ShowColProcessName
+        || settings.ShowWindowPreview        != g_Settings.ShowWindowPreview
         || settings.HKAltTabEnabled          != g_Settings.HKAltTabEnabled
         || settings.HKAltBacktickEnabled     != g_Settings.HKAltBacktickEnabled
         || settings.HKAltCtrlTabEnabled      != g_Settings.HKAltCtrlTabEnabled
@@ -325,6 +329,7 @@ void ATSettingsInitDialog(HWND hDlg, const AltTabSettings& settings) {
     CheckDlgButton(hDlg, IDC_CHECK_SHOW_SEARCH_STRING, settings.ShowSearchString ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hDlg, IDC_CHECK_SHOW_COL_HEADER, settings.ShowColHeader ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hDlg, IDC_CHECK_SHOW_COL_PROCESSNAME, settings.ShowColProcessName ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(hDlg, IDC_CHECK_SHOW_WINDOW_PREVIEW, settings.ShowWindowPreview ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hDlg, IDC_CHECK_PROCESS_EXCLUSIONS, settings.ProcessExclusionsEnabled ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(hDlg, IDC_CHECK_MH_SHOW_PROCESSINFO_TOOLTIP,
                    settings.ShowProcessInfoTooltip ? BST_CHECKED : BST_UNCHECKED);

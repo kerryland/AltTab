@@ -6,6 +6,7 @@
 #include "AltTabListView.h"
 #include "AltTabContextMenu.h"
 #include "AltTabTooltip.h"
+#include "WindowPreview.h"
 #include "SettingsDialog.h"
 #include "ProcessExplorer.h"
 #include "GlobalData.h"
@@ -311,6 +312,10 @@ void DestroyAltTabWindow(const bool activate) {
 
     HideCustomToolTip();
     KillTimer(g_hMainWnd, TIMER_CHECK_ALT_KEYUP);
+
+    // Hide the preview panel first so it never lingers over the desktop while
+    // the target window is being activated.
+    WindowPreviewReset();
 
     if (g_idThreadAttachTo) {
         AttachThreadInput(GetCurrentThreadId(), g_idThreadAttachTo, FALSE);

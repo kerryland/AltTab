@@ -6,6 +6,7 @@
 #include "AltTabContextMenu.h"
 #include "ProcessExplorer.h"
 #include "SettingsDialog.h"
+#include "WindowPreview.h"
 #include "GlobalData.h"
 #include "Logger.h"
 #include "Utils.h"
@@ -488,16 +489,19 @@ static void SizeAltTabWindowToContent() {
 
     const int windowWidth  = g_Settings.WindowWidth;
     const int windowHeight = g_Settings.WindowHeight;
+    // The preview is a separate window beside the switcher; keep the switcher
+    // itself at the list width but center the combined block on screen.
+    const int totalWidth   = windowWidth + GetWindowPreviewWidth(windowWidth);
     const int screenWidth  = GetSystemMetrics(SM_CXSCREEN);
     const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    const int windowX = (screenWidth - windowWidth) / 2;
+    const int windowX = (screenWidth - totalWidth) / 2;
     const int windowY = (screenHeight - windowHeight) / 2;
 
     int requiredHeight = itemHeight * itemCount + headerHeight + searchStringHeight + 2;
 
     if (requiredHeight <= windowHeight) {
         SetWindowPos(g_hAltTabWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
-        WindowResizeAndPosition(g_hAltTabWnd, windowWidth, requiredHeight);
+        WindowResizeAndPosition(g_hAltTabWnd, totalWidth, requiredHeight);
     } else {
         const int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
         const int processNameWidth = GetColProcessNameWidth();
@@ -521,7 +525,7 @@ static void SizeAltTabWindowToContent() {
         }
 
         SetWindowPos(g_hAltTabWnd, HWND_TOPMOST, windowX, windowY, windowWidth, requiredHeight, SWP_NOZORDER);
-        WindowResizeAndPosition(g_hAltTabWnd, windowWidth, requiredHeight);
+        WindowResizeAndPosition(g_hAltTabWnd, totalWidth, requiredHeight);
     }
 
     // Column widths mix DPI-scaled and raw constants, so their sum can exceed
@@ -594,6 +598,15 @@ static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
     if (isFirstPopulation) {
         g_altTabWindowInitialized = true;
 
+        SizeAltTabWindowToContent();
+
+        // Size/position and show the switcher + preview panel first, then pick
+        // the initial row (which registers the DWM thumbnail on a visible
+        // destination).
+        LayoutWindowPreview(g_hAltTabWnd, g_Settings.WindowWidth);
+        ShowWindow(g_hAltTabWnd, SW_SHOWNORMAL);
+        ShowWindowPreview(true);
+
         if (!g_AltTabWindows.empty()) {
             // The window was opened by the Alt+Tab key press whose direction we
             // captured; the old synchronous flow highlighted row 0 first and
@@ -605,11 +618,8 @@ static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
             g_SelectedIndex = -1;
         }
 
-        SizeAltTabWindowToContent();
-
-        // Show the window now that it is correctly sized, and give it focus
-        // (it was created hidden so it never flashes at the provisional size).
-        ShowWindow(g_hAltTabWnd, SW_SHOWNORMAL);
+        // Give it focus (it was created hidden so it never flashes at the
+        // provisional size).
         SetForegroundWindow(g_hAltTabWnd);
         SetFocus(g_hSearchString);
     } else {
@@ -731,6 +741,9 @@ void ATWListViewSelectItem(int rowNumber) {
     SendMessageW(g_hListView, LVM_ENSUREVISIBLE, rowNumber, (LPARAM)FALSE);
 
     g_SelectedIndex = rowNumber;
+
+    // Preview of the newly selected window is captured on a worker thread.
+    RequestWindowPreview();
 }
 
 void ATWListViewSelectPrevItem() {
@@ -753,6 +766,8 @@ void ATWListViewSelectPrevItem() {
     SendMessageW(g_hListView, LVM_ENSUREVISIBLE, prevInd, (LPARAM)FALSE);
 
     g_SelectedIndex = prevInd;
+
+    RequestWindowPreview();
 }
 
 void ATWListViewSelectNextItem() {
@@ -775,6 +790,8 @@ void ATWListViewSelectNextItem() {
     SendMessageW(g_hListView, LVM_ENSUREVISIBLE, nextInd, (LPARAM)FALSE);
 
     g_SelectedIndex = nextInd;
+
+    RequestWindowPreview();
 }
 
 void ATWListViewDeleteItem(int rowNumber) {
@@ -1245,7 +1262,6 @@ void InitListView(HWND hWnd) {
     const int windowWidth  = (int)(screenWidth * g_Settings.WidthPercentage * 0.01);
     const int windowHeight = (int)(screenHeight * g_Settings.HeightPercentage * 0.01);
 
-    const int windowX = (screenWidth - windowWidth) / 2;
     const int windowY = (screenHeight - windowHeight) / 2;
 
     DWORD style = WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_OWNERDRAWFIXED;
@@ -1325,6 +1341,11 @@ void InitListView(HWND hWnd) {
     SendMessageW(hListView, WM_SETFONT, (WPARAM)g_hLVFont, MAKELPARAM(TRUE, 0));
     SetWindowSubclass(hListView, ListViewSubclassProc, 1, 0);
 
+    // Preview panel to the right of the ListView (a live DWM thumbnail).
+    if (IsWindowPreviewEnabled()) {
+        CreateWindowPreview();
+    }
+
     g_Settings.WindowWidth  = windowWidth;
     g_Settings.WindowHeight = windowHeight;
 
@@ -1340,8 +1361,12 @@ void InitListView(HWND hWnd) {
     // avoid flashing the provisional size).
     RefreshAltTabWindow();
 
-    // Provisional size until the first enumeration result arrives.
-    SetWindowPos(hWnd, HWND_TOPMOST, windowX, windowY, windowWidth, windowHeight, SWP_NOZORDER);
+    // Provisional size until the first enumeration result arrives. The switcher
+    // keeps the list width; the preview (a separate window) is centered with it.
+    const int totalWidth = windowWidth + GetWindowPreviewWidth(windowWidth);
+    const int totalX = (screenWidth - totalWidth) / 2;
+    SetWindowPos(hWnd, HWND_TOPMOST, totalX, windowY, windowWidth, windowHeight, SWP_NOZORDER);
+    LayoutWindowPreview(hWnd, windowWidth);
 
     // Keep the list fresh while the window stays open.
     SetTimer(hWnd, TIMER_WINDOW_COUNT, TIMER_WINDOW_COUNT_ELAPSE, nullptr);

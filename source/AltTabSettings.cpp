@@ -46,6 +46,7 @@ const wchar_t* WINDOW_HEIGHT_PERCENTAGE  = L"WindowHeightPercentage"  ;
 const wchar_t* SHOW_SEARCH_STRING        = L"ShowSearchString"        ;
 const wchar_t* SHOW_COL_HEADER           = L"ShowColHeader"           ;
 const wchar_t* SHOW_COL_PROCESSNAME      = L"ShowColProcessName"      ;
+const wchar_t* SHOW_WINDOW_PREVIEW       = L"ShowWindowPreview"       ;
 const wchar_t* SHOW_PROCESS_INFO_TOOLTIP = L"ShowProcessInfoTooltip"  ;
 const wchar_t* SHOW_HIGHLIGHT_RECT       = L"ShowHighlightRect"       ;
 const wchar_t* SHOW_DELETE_BUTTON        = L"ShowDeleteButton"        ;
@@ -189,6 +190,7 @@ void AltTabSettings::Reset() {
     ShowSearchString           = DEFAULT_SHOW_SEARCH_STRING         ;
     ShowColHeader              = DEFAULT_SHOW_COL_HEADER            ;
     ShowColProcessName         = DEFAULT_SHOW_COL_PROCESSNAME       ;
+    ShowWindowPreview          = DEFAULT_SHOW_WINDOW_PREVIEW        ;
     ShowProcessInfoTooltip     = DEFAULT_MH_SHOW_PROCESSINFO_TOOLTIP;
     ShowHighlightRect          = DEFAULT_MH_SHOW_HIGHLIGHT_RECT     ;
     ShowDeleteButton           = DEFAULT_MH_SHOW_DELETE_BUTTON      ;
@@ -363,6 +365,7 @@ void ATSettingsToFile(const std::wstring& iniFile) {
     WriteSetting(iniFile, GENERAL, SHOW_SEARCH_STRING, g_Settings.ShowSearchString);
     WriteSetting(iniFile, GENERAL, SHOW_COL_HEADER, g_Settings.ShowColHeader);
     WriteSetting(iniFile, GENERAL, SHOW_COL_PROCESSNAME, g_Settings.ShowColProcessName);
+    WriteSetting(iniFile, GENERAL, SHOW_WINDOW_PREVIEW, g_Settings.ShowWindowPreview);
     WriteSetting(iniFile, GENERAL, CHECK_FOR_UPDATES, g_Settings.CheckForUpdatesOpt);
     WriteSetting(iniFile, GENERAL, SYSTEM_TRAY_ICON_ENABLED, g_Settings.SystemTrayIconEnabled);
 
@@ -424,6 +427,7 @@ void ATLoadSettings() {
     ReadSetting(iniFile, GENERAL, SHOW_SEARCH_STRING, DEFAULT_SHOW_SEARCH_STRING, g_Settings.ShowSearchString);
     ReadSetting(iniFile, GENERAL, SHOW_COL_HEADER, DEFAULT_SHOW_COL_HEADER, g_Settings.ShowColHeader);
     ReadSetting(iniFile, GENERAL, SHOW_COL_PROCESSNAME, DEFAULT_SHOW_COL_PROCESSNAME, g_Settings.ShowColProcessName);
+    ReadSetting(iniFile, GENERAL, SHOW_WINDOW_PREVIEW, DEFAULT_SHOW_WINDOW_PREVIEW, g_Settings.ShowWindowPreview);
     ReadSetting(iniFile, GENERAL, CHECK_FOR_UPDATES, DEFAULT_CHECKFORUPDATES, g_Settings.CheckForUpdatesOpt);
     ReadSetting(iniFile, GENERAL, SYSTEM_TRAY_ICON_ENABLED, DEFAULT_SYSTEM_TRAY_ICON_ENABLED, g_Settings.SystemTrayIconEnabled);
 
