@@ -1,7 +1,7 @@
 #pragma once
 
 #define AT_VERSION_MAJOR         0
-#define AT_VERSION_MINOR         1
+#define AT_VERSION_MINOR         2
 #define AT_VERSION_PATCH         1
 
 #define ATSTR_(x)                #x
@@ -10,9 +10,9 @@
 #define AT_PRODUCT_PAGE 	      L"https://alttab.sourceforge.io/"
 #define AT_PRODUCT_LATEST_URL    L"https://github.com/kerryland/AltTab/releases/latest"
 #define AT_UPDATE_FILE_URL       L"https://api.github.com/repos/kerryland/AltTab/releases/latest"
-#define AT_AUTHOR_NAME 		      L"Lokesh Govindu"
-#define AT_AUTHOR_PAGE 		      L"https://github.com/lokeshgovindu"
-#define AT_AUTHOR_EMAIL          L"lokeshgovindu@gmail.com"
+#define AT_AUTHOR_NAME 		      L"Kerryland"
+#define AT_AUTHOR_PAGE 		      L"https://github.com/kerryland"
+#define AT_AUTHOR_EMAIL          L"kerryland@gmail.com"
 
 #define AT_VERSION_VSINFO        AT_VERSION_MAJOR,AT_VERSION_MINOR,AT_VERSION_PATCH,0
 #define AT_VERSION_TEXT          ATSTR(AT_VERSION_MAJOR.AT_VERSION_MINOR.AT_VERSION_PATCH)
@@ -28,5 +28,5 @@
 #define AT_PRODUCT_NAMEW         TEXT(AT_PRODUCT_NAME)
 #define AT_PRODUCT_VERSIONA      ATSTR(AT_VERSION_MAJOR.AT_VERSION_MINOR)
 #define AT_PRODUCT_VERSIONW      TEXT(AT_PRODUCT_VERSIONA)
-#define AT_LEGAL_COPYRIGHT       "Copyright © 2026 Lokesh Govindu"
+#define AT_LEGAL_COPYRIGHT       "Copyright © 2026 Kerryland"
 #define AT_FILE_DESCRIPTION      "AltTab Switcher"

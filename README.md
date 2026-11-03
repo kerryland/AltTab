@@ -2,7 +2,7 @@
 AltTab is a small application created in C++, Win32, is an alternative for windows native task switcher (Alt+Tab / Alt+Shift+Tab). 
 
 The original author, Lokesh Govindu, decided to take it closed-source so this fork is based on a slightly older version that I have
-bug fixed mostly using AI. His closed-source version can be found [on Sourceforge](https://sourceforge.net/projects/alttab/)
+bug fixed and added new features (mostly using AI). His closed-source version can be found [on Sourceforge](https://sourceforge.net/projects/alttab/)
 
 # Features
 * Find the right window faster (filter windows using search string), uses fuzzy string matching algorithm (no need to type the exact search string).

@@ -1,29 +1,19 @@
-
-_________________________      ______  
-___    |__  /_  /___  __/_____ ___  /_ 
-__  /| |_  /_  __/_  /  _  __ `/_  __ \
-_  ___ |  / / /_ _  /   / /_/ /_  /_/ /
-/_/  |_/_/  \__/ /_/    \__,_/ /_.___/ 
-                                       
-
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
 │ ProductName: AltTab                                                         │
-│ ProductPage: http://alttab.sourceforge.net/                                 │
+│ ProductPage: https://github.com/kerryland/AltTab                            │
 │                                                                             │
-│      Author: Lokesh Govindu                                                 │
-│       Email: lokeshgovindu@gmail.com                                        │
-│    HomePage: https://github.com/lokeshgovindu                               │
-│                                                                             │
+│      Author: Kerryland                                                      │
+│       Email: kerryland@gmail.com                                            │
+│    HomePage: https://github.com/kerryland                                   │
+│    Original: http://alttab.sourceforge.net/                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
-
 
 Introduction
 ------------
 AltTab is an alternative application for native windows switcher.
 
 - Use Alt+Tab / Alt+Shift+Tab / Alt+Backtick / Alt+Shift+Backtick to bring the
-  main AltTab window, and use 
+  main AltTab window, and use
 
 - Use Alt+Ctrl+Tab to bring the main AltTab window and remains open even Alt key
   is released.
@@ -43,28 +33,8 @@ AltTab is an alternative application for native windows switcher.
   │ Apps        │ Show context menu                                         │
   └─────────────┴───────────────────────────────────────────────────────────┘
 
-  Please check the AltTab icon in system tray for some more settings:
+  Please check the AltTab icon in system tray for some more settings, or right-click to access the context menu
   -------------------------------------------------------------------
-  ┌───────────────────────────┐
-  │ About AltTab              │
-  ├───────────────────────────┤
-  │ ReadMe                    │
-  │ Help                      │
-  │ Release Notes             │
-  ├───────────────────────────┤
-  │ Settings                  │
-  │ Disable AltTab            │
-  │ Check for Updates         │
-  │ Rut at Startup            │
-  │ Rut as Administrator      │
-  ├───────────────────────────┤
-  │ Close All Windows         │
-  ├───────────────────────────┤
-  │ Reload AltTabSettings.ini │
-  │ Restart                   │
-  │ Exit                      │
-  └───────────────────────────┘
-
 
 Installation
 ------------
@@ -73,34 +43,14 @@ Just execute the AltTab and try the following:
   Alt+Ctrl+Tab / Alt+Ctrl+Shift+Tab
   Alt+Backtick(~) / Alt+Shift+Backtick(~)
 
-
 Websites
 --------
-AltTab official site:
-  http://alttab.sourceforge.net/
-
-AltTab wiki:
-  https://sourceforge.net/p/alttab/wiki/Home/
-
-AltTab support:
-  https://sourceforge.net/projects/alttab/support/
-
-
-Known Limitations
------------------
-- When running any application as an administrator (as elevated permissions), 
-  AltTab hotkeys does not work when the elevated applications are in focus.
-  This can be addressed by also running AltTab as an administrator.
-
-
-Known Issues
-------------
-- Available @ https://sourceforge.net/p/alttab/tickets/
-
+AltTab fork official site: https://github.com/kerryland/AltTab
+Original project site:     http://alttab.sourceforge.net/
 
 Credits:
 --------
-- First thanks to God
+- https://github.com/lokeshgovindu    : Lokesh Govindu. Original author
 - https://github.com/tmplt/fuzzywuzzy : fuzzywuzzy
 - https://github.com/kerryland        : Contributions to AltTab
 - https://www.helpndoc.com/           : Used for creating CHM help document.

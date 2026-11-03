@@ -1,3 +1,29 @@
+0.2.1 new features and bug fixes
+-------------------------------------
++ Live window preview: while switching, a preview of the selected window is
+  shown to the right of the AltTab window, just like the Windows Alt+Tab.
+  Turn it on or off with the new "Show Window Preview" setting.
++ Pass-through apps: choose which applications (for example RustDesk, Remote
+  Desktop or TeamViewer) should receive Alt+Tab and Alt+Backtick themselves.
+  Handy when remotely controlling another PC, so the remote computer's Alt+Tab
+  is used instead of the local one.
++ Similar Process Groups now have a visual manager - pick the processes from a
+  list instead of typing them.
++ "Process Exclusions" is now called "Hidden Processes" and is also configured
+  by picking processes from a list.
++ The window list is now ordered most-recently-used first, matching Windows.
+- Switching away from a fullscreen application now behaves like the Windows
+  Alt+Tab instead of the fullscreen window taking focus back.
+- The AltTab window no longer flashes at the wrong size when it opens.
+- Fixed a crash that could happen when AltTab is closed.
+- The process tooltip no longer stays on screen after the mouse moves away.
+- Alt+Tab now works normally while the Settings dialog is open.
+- Alt+Backtick now switches between the windows of the application you were
+  actually using, and no longer beeps while doing so.
+- Background and ghost windows (such as hidden Store apps) no longer show up in
+  the list.
+- Switching stays quick even when many applications are open.
+
 0.1.1
 -------------------------------------
 - 'Check for updates' now looks at my github fork
