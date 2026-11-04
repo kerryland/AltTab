@@ -600,6 +600,21 @@ static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
 
         SizeAltTabWindowToContent();
 
+        // A quick tap releases Alt before the asynchronous enumeration has
+        // returned. Now that the list finally exists, complete the switch
+        // immediately instead of showing the switcher and waiting for the
+        // Alt-key-up timer to close it again.
+        if (!(GetAsyncKeyState(VK_MENU) & 0x8000)) {
+            if (!g_AltTabWindows.empty()) {
+                const int N = (int)g_AltTabWindows.size();
+                ATWListViewSelectItem((N + g_initialSwitchDirection) % N);
+            } else {
+                g_SelectedIndex = -1;
+            }
+            DestroyAltTabWindow(true);
+            return;
+        }
+
         // Size/position and show the switcher + preview panel first, then pick
         // the initial row (which registers the DWM thumbnail on a visible
         // destination).
@@ -629,6 +644,14 @@ static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
 
 void AltTabListViewSetInitialDirection(int direction) {
     g_initialSwitchDirection = direction;
+}
+
+int AltTabListViewGetInitialDirection() {
+    return g_initialSwitchDirection;
+}
+
+bool AltTabListViewInitialPopulationApplied() {
+    return g_altTabWindowInitialized;
 }
 
 void AltTabListViewProcessEnumResult() {

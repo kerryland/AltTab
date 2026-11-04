@@ -72,6 +72,18 @@ void UninitializeWindowsActivationTracking();
 void MoveWindowToActivationFront(HWND hWnd);
 
 /*!
+ * \brief Resolve the window a switch would land on using only the activation
+ *        MRU (no enumeration). Used as a fallback for a quick Alt+Tab tap when
+ *        the asynchronous list has not been built yet.
+ *
+ * \param hCurrent  The window the switch started from (may be null to use
+ *                  the current foreground window).
+ * \param direction +1 for forward, -1 for backward.
+ * \return The target window, or nullptr if it cannot be determined yet.
+ */
+HWND GetPreviousActivationWindow(HWND hCurrent, int direction);
+
+/*!
  * \brief Ignore foreground-change events for the given number of ms. AltTab
  *        calls this right after completing a switch, because destroying the
  *        switcher / restoring / minimizing can fire spurious activation events

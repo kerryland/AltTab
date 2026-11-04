@@ -30,6 +30,17 @@ void RefreshAltTabWindow();
 void AltTabListViewSetInitialDirection(int direction);
 
 /*!
+ * \brief Direction (+1 / -1) of the hotkey that opened the current window.
+ */
+int AltTabListViewGetInitialDirection();
+
+/*!
+ * \brief Whether the first asynchronous enumeration result has been applied
+ *        (i.e. the ListView now holds a selectable window list).
+ */
+bool AltTabListViewInitialPopulationApplied();
+
+/*!
  * \brief Consume the latest asynchronous enumeration result and (re)build the
  *        list. Posted to the AltTab window as WM_USER_ALTTAB_ENUM_DONE;
  *        must be called on the UI thread.

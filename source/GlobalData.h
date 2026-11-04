@@ -28,6 +28,8 @@ extern HINSTANCE                            g_hInstance;
 extern HWND                                 g_hMainWnd;              // AltTab main window handle
 extern HWND                                 g_hSettingsWnd;          // AltTab settings window handle
 extern HWND                                 g_hAltTabWnd;            // AltTab window handle
+extern HWND                                 g_switchSourceWnd;       // Foreground window the switch started from
+extern ULONGLONG                            g_switchStartTick;       // When the current switch began
 extern HWND                                 g_hSearchString;
 extern HWND                                 g_hListView;
 extern int                                  g_nLVHotItem;

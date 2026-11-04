@@ -494,6 +494,33 @@ void CALLBACK CheckForUpdatesTimerCB(HWND /*hWnd*/, UINT /*uMsg*/, UINT_PTR /*id
 void CALLBACK CheckAltKeyIsReleased(HWND /*hWnd*/, UINT /*uMsg*/, UINT_PTR /*idEvent*/, DWORD /*dwTime*/) {
     const bool isAltPressed = GetAsyncKeyState(VK_MENU) & 0x8000;
     if (g_hAltTabWnd && !isAltPressed) {
+        // A quick tap can release Alt before the asynchronous enumeration has
+        // populated the list. Switch straight to the previous window from the
+        // cached activation order so the tap is not lost (and never shows the
+        // switcher); only if nothing is cached (e.g. the first ever switch)
+        // wait for ApplyEnumResults to complete it.
+        if (!AltTabListViewInitialPopulationApplied()) {
+            if (g_IsAltTab && !g_IsAltBacktick) {
+                HWND quickTarget =
+                    GetPreviousActivationWindow(g_switchSourceWnd, AltTabListViewGetInitialDirection());
+                if (quickTarget != nullptr) {
+                    AT_LOG_INFO("--------- Alt key released (quick switch)! ---------");
+                    DestroyAltTabWindow(true, quickTarget);
+                    return;
+                }
+            }
+
+            // Nothing cached to switch to (e.g. the very first switch after
+            // launch): wait for the enumeration, but never indefinitely - a
+            // stuck worker must not leave an invisible switcher swallowing
+            // every keystroke.
+            if (GetTickCount64() - g_switchStartTick > 2000) {
+                AT_LOG_WARN("Enumeration did not finish in time; closing the switcher.");
+                DestroyAltTabWindow(true);
+            }
+            return;
+        }
+
         AT_LOG_INFO("--------- Alt key released! ---------");
         DestroyAltTabWindow(true);
     }

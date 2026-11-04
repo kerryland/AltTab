@@ -24,6 +24,8 @@
 // Global Variables:
 // ----------------------------------------------------------------------------
 HWND     g_hAltTabWnd           = nullptr;
+HWND     g_switchSourceWnd      = nullptr;              // Window the current switch started from
+ULONGLONG g_switchStartTick     = 0;                    // When the current switch began
 bool     g_hAltTabIsBeingClosed = false;                // Is AltTab window being closed
 bool     g_bIgnoreWM_ACTIVATE   = false;                // Ignore WM_ACTIVATE with WA_INACTIVE
 DWORD    g_idThreadAttachTo     = 0;                    // Thread whose input we attached to
@@ -120,6 +122,12 @@ HWND ShowAltTabWindow(HWND& hAltTabWnd, int direction) {
                 src.ProcessName.c_str());
             g_AltBacktickWndInfo = src;
         }
+
+        // Remember where the switch started. The quick-tap fallback uses this
+        // instead of a later GetForegroundWindow (which may already have moved
+        // on) to find the previous window in the MRU.
+        g_switchSourceWnd = hForegroundWnd;
+        g_switchStartTick = GetTickCount64();
 
         AltTabListViewSetInitialDirection(direction);
         hAltTabWnd = CreateAltTabWindow();
@@ -296,7 +304,7 @@ static void ATW_OnDestroy(HWND hwnd) {
 // AltTab window lifecycle
 // ----------------------------------------------------------------------------
 
-void DestroyAltTabWindow(const bool activate) {
+void DestroyAltTabWindow(const bool activate, HWND hActivateWnd) {
     if (g_hAltTabWnd == nullptr || g_hAltTabIsBeingClosed) {
         return;
     }
@@ -317,16 +325,17 @@ void DestroyAltTabWindow(const bool activate) {
     // the target window is being activated.
     WindowPreviewReset();
 
-    if (g_idThreadAttachTo) {
-        AttachThreadInput(GetCurrentThreadId(), g_idThreadAttachTo, FALSE);
-        g_idThreadAttachTo = 0;
-    }
-
     HWND hWnd = nullptr;
     if (activate) {
-        const int selectedInd = (int)SendMessageW(g_hListView, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
-        if (selectedInd != -1 && selectedInd < (int)g_AltTabWindows.size()) {
-            hWnd = g_AltTabWindows[selectedInd].hWnd;
+        if (hActivateWnd != nullptr) {
+            hWnd = hActivateWnd;
+        } else {
+            const int selectedInd = (int)SendMessageW(g_hListView, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED);
+            if (selectedInd != -1 && selectedInd < (int)g_AltTabWindows.size()) {
+                hWnd = g_AltTabWindows[selectedInd].hWnd;
+            }
+        }
+        if (hWnd != nullptr) {
             AT_LOG_INFO("hWnd = [%#x], title = [%s]", hWnd, GetWindowTitleExA(hWnd).c_str());
         }
     }
@@ -347,6 +356,14 @@ void DestroyAltTabWindow(const bool activate) {
         SuppressForegroundTrackingFor(300);
     }
 
+    // Detach only after the activation: on a quick tap the switcher never
+    // became foreground, so the input attachment is what makes
+    // SetForegroundWindow succeed.
+    if (g_idThreadAttachTo) {
+        AttachThreadInput(GetCurrentThreadId(), g_idThreadAttachTo, FALSE);
+        g_idThreadAttachTo = 0;
+    }
+
     // Cleanup state.
     AltTabListViewShutdown();
 
@@ -355,6 +372,7 @@ void DestroyAltTabWindow(const bool activate) {
     g_IsAltBacktick          = false;
     g_SelectedIndex          = -1;
     g_AltBacktickWndInfo     = {};   // re-captured on the next Alt+Backtick
+    g_switchSourceWnd        = nullptr;
     g_hAltTabIsBeingClosed   = false;
 }
 

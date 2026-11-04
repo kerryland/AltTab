@@ -89,9 +89,11 @@ void SetAltTabActiveWindow();
 
 /*!
  * \brief Destroy the AltTab window and do the cleanup.
- * \param activate true to activate the currently selected system window.
+ * \param activate      true to activate a system window.
+ * \param hActivateWnd  Optional explicit window to activate; when null the
+ *                      currently selected list row is used.
  */
-void DestroyAltTabWindow(const bool activate = false);
+void DestroyAltTabWindow(const bool activate = false, HWND hActivateWnd = nullptr);
 
 void ActivateWindow(HWND hWnd);
 

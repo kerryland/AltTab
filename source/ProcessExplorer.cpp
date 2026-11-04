@@ -514,6 +514,39 @@ void SuppressForegroundTrackingFor(DWORD milliseconds) {
     g_foregroundIgnoredUntil = GetTickCount64() + milliseconds;
 }
 
+HWND GetPreviousActivationWindow(HWND hCurrent, int direction) {
+    if (direction == 0) {
+        return nullptr;
+    }
+    if (hCurrent == nullptr) {
+        hCurrent = GetForegroundWindow();
+    }
+
+    // The MRU is most-recent-first, so the first switchable window that is not
+    // the one we are leaving is exactly the previous window. For a backward
+    // switch take the least recently used one instead.
+    HWND target = nullptr;
+    for (HWND hWnd : g_activationMru) {
+        if (hWnd == nullptr || hWnd == hCurrent || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd) {
+            continue;
+        }
+        if (!IsAltTabWindow(hWnd)) {
+            continue;
+        }
+        target = hWnd;
+        if (direction > 0) {
+            break;
+        }
+    }
+
+    AT_LOG_INFO(
+        "GetPreviousActivationWindow: source=%p dir=%d target=%p",
+        (void*)hCurrent,
+        direction,
+        (void*)target);
+    return target;
+}
+
 AltTabEnumContext CaptureAltTabEnumContext() {
     AltTabEnumContext context;
     context.IsAltTab                 = g_IsAltTab;
