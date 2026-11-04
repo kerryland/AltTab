@@ -369,6 +369,10 @@ LRESULT CALLBACK SearchStringSubclassProc(
                 SendMessageW(g_hSearchString, WM_SETTEXT, 0, (LPARAM)g_SearchString.c_str());
                 SendMessageW(g_hSearchString, EM_SETSEL, (WPARAM)g_SearchString.size(), (LPARAM)g_SearchString.size());
 
+                // Filter immediately instead of waiting for the freshness
+                // timer (5 s in Debug builds), which made typing feel sluggish.
+                RefreshAltTabWindow();
+
                 // The character is already stored in g_SearchString / the edit
                 // control above; consume the matching WM_CHAR to avoid the edit
                 // control inserting it a second time.
@@ -404,6 +408,9 @@ LRESULT CALLBACK SearchStringSubclassProc(
             wchar_t searchString[_MAX_PATH] = {};
             GetWindowTextW(g_hSearchString, searchString, _MAX_PATH);
             g_SearchString = searchString;
+
+            // Filter immediately instead of waiting for the freshness timer.
+            RefreshAltTabWindow();
             return result;
         }
         return 0;
@@ -603,8 +610,9 @@ static void ApplyEnumResults(std::vector<AltTabWindowData> windows) {
         // A quick tap releases Alt before the asynchronous enumeration has
         // returned. Now that the list finally exists, complete the switch
         // immediately instead of showing the switcher and waiting for the
-        // Alt-key-up timer to close it again.
-        if (!(GetAsyncKeyState(VK_MENU) & 0x8000)) {
+        // Alt-key-up timer to close it again. Alt+Ctrl+Tab is deliberately
+        // sticky, so it must stay open even after Alt is released.
+        if (g_IsAltTab && !g_IsAltCtrlTab && !(GetAsyncKeyState(VK_MENU) & 0x8000)) {
             if (!g_AltTabWindows.empty()) {
                 const int N = (int)g_AltTabWindows.size();
                 ATWListViewSelectItem((N + g_initialSwitchDirection) % N);
