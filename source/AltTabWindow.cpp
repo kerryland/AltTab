@@ -388,6 +388,14 @@ static bool IsFullscreenWindow(HWND hWnd) {
     if (IsIconic(hWnd) || !IsWindowVisible(hWnd)) {
         return false;
     }
+    // A maximized window also extends slightly past the monitor edges (its
+    // invisible resize border), but minimizing it before a switch is both
+    // unnecessary and harmful: the asynchronous minimize can race the
+    // activation and leave the newly selected window without focus. Only
+    // treat borderless (non-maximized) monitor-covering windows as fullscreen.
+    if (IsZoomed(hWnd)) {
+        return false;
+    }
     RECT rcWnd;
     if (!GetWindowRect(hWnd, &rcWnd)) {
         return false;
@@ -422,8 +430,10 @@ void ActivateWindow(HWND hTargetWnd) {
     }
 
     if (IsIconic(hTargetWnd)) {
-        PostMessage(hTargetWnd, WM_SYSCOMMAND, SC_RESTORE, 0);
-        return;
+        // Restore synchronously and continue to the foreground activation:
+        // posting SC_RESTORE and returning left the restored window without
+        // focus often enough to be noticeable.
+        ShowWindow(hTargetWnd, SW_RESTORE);
     }
 
     if (SetForegroundWindow(hTargetWnd)) {
