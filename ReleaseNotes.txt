@@ -4,6 +4,19 @@ Known Issues
 ------------
 - Available @ https://github.com/kerryland/AltTab/issues
 
+0.2.2 bug fixes
+-------------------------------------
+- Alt+Tab now returns to the right window after you close a "Save As" or other
+  file dialog, and apps with a dialog open keep their proper place in the
+  most-recently-used order.
+- A quick Alt+Tab tap now works even if you tap it before the window list has
+  finished loading.
+- Typing in the search box filters the list immediately, so it no longer feels
+  sluggish.
+- Selecting a minimized window now reliably gives it focus.
+- Maximized windows are no longer minimized when you switch away from them.
+- Alt+Ctrl+Tab now stays open when you release Alt, as intended.
+
 0.2.1 new features and bug fixes
 -------------------------------------
 + Live window preview: while switching, a preview of the selected window is

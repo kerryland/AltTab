@@ -2,7 +2,7 @@
 
 #define AT_VERSION_MAJOR         0
 #define AT_VERSION_MINOR         2
-#define AT_VERSION_PATCH         1
+#define AT_VERSION_PATCH         2
 
 #define ATSTR_(x)                #x
 #define ATSTR(x)                 ATSTR_(x)

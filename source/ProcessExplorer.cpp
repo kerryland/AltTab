@@ -430,6 +430,44 @@ std::vector<HWND>   g_activationMru;
 // restoring/minimizing, fallback activation tricks) must not reorder the MRU.
 ULONGLONG           g_foregroundIgnoredUntil = 0;
 
+// A top-level popup (e.g. a "Save As" file dialog) and the window that owns it
+// are a single logical Alt+Tab entry. Which of the two passes IsAltTabWindow
+// depends on whether the group is currently active:
+//   - while it is active, GetLastActivePopup(owner) is the popup, so the popup
+//     is listed and the owner is not;
+//   - while it is inactive, GetLastActivePopup(owner) returns the owner, so the
+//     owner is listed and the popup is not.
+// The MRU therefore stores the group's identity (its top-most visible owner),
+// not the exact foreground handle, so opening a dialog does not push its app
+// out of order and a destroyed dialog cannot leave an unmatchable entry behind.
+HWND AltTabWindowIdentity(HWND hWnd) {
+    if (hWnd == nullptr) {
+        return nullptr;
+    }
+    HWND identity = hWnd;
+    for (HWND owner = GetWindow(hWnd, GW_OWNER); owner != nullptr; owner = GetWindow(owner, GW_OWNER)) {
+        if (IsWindowVisible(owner)) {
+            identity = owner;
+        }
+    }
+    return identity;
+}
+
+void RecordActivation(HWND hWnd) {
+    const HWND identity = AltTabWindowIdentity(hWnd);
+    if (identity == nullptr) {
+        return;
+    }
+    auto it = std::find(g_activationMru.begin(), g_activationMru.end(), identity);
+    if (it != g_activationMru.end()) {
+        g_activationMru.erase(it);
+    }
+    g_activationMru.insert(g_activationMru.begin(), identity);
+    if (g_activationMru.size() > 64) {
+        g_activationMru.pop_back();
+    }
+}
+
 void CALLBACK ActivationHookProc(
     HWINEVENTHOOK /*hWinEventHook*/,
     DWORD /*event*/,
@@ -454,14 +492,7 @@ void CALLBACK ActivationHookProc(
         return;
     }
 
-    auto it = std::find(g_activationMru.begin(), g_activationMru.end(), hWnd);
-    if (it != g_activationMru.end()) {
-        g_activationMru.erase(it);
-    }
-    g_activationMru.insert(g_activationMru.begin(), hWnd);
-    if (g_activationMru.size() > 64) {
-        g_activationMru.pop_back();
-    }
+    RecordActivation(hWnd);
 }
 
 std::vector<HWND> GetActivationMruSnapshot() {
@@ -497,17 +528,14 @@ void UninitializeWindowsActivationTracking() {
 }
 
 void MoveWindowToActivationFront(HWND hWnd) {
-    if (hWnd == nullptr || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd || !IsAltTabWindow(hWnd)) {
+    // Deliberately not gated on IsAltTabWindow: the handle may be an owner
+    // whose modal popup currently satisfies IsAltTabWindow instead (e.g.
+    // switching back to an app that still has a "Save As" dialog open). The
+    // group must still be moved to the front.
+    if (hWnd == nullptr || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd || !IsWindow(hWnd)) {
         return;
     }
-    auto it = std::find(g_activationMru.begin(), g_activationMru.end(), hWnd);
-    if (it != g_activationMru.end()) {
-        g_activationMru.erase(it);
-    }
-    g_activationMru.insert(g_activationMru.begin(), hWnd);
-    if (g_activationMru.size() > 64) {
-        g_activationMru.pop_back();
-    }
+    RecordActivation(hWnd);
 }
 
 void SuppressForegroundTrackingFor(DWORD milliseconds) {
@@ -525,15 +553,28 @@ HWND GetPreviousActivationWindow(HWND hCurrent, int direction) {
     // The MRU is most-recent-first, so the first switchable window that is not
     // the one we are leaving is exactly the previous window. For a backward
     // switch take the least recently used one instead.
-    HWND target = nullptr;
+    const HWND currentIdentity = AltTabWindowIdentity(hCurrent);
+    HWND       target          = nullptr;
     for (HWND hWnd : g_activationMru) {
-        if (hWnd == nullptr || hWnd == hCurrent || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd) {
+        if (hWnd == nullptr || hWnd == g_hMainWnd || hWnd == g_hAltTabWnd) {
             continue;
         }
-        if (!IsAltTabWindow(hWnd)) {
+
+        // MRU entries are group identities (an owner); if that owner is not
+        // switchable in its current state, the modal popup representing the
+        // group is what should be activated.
+        HWND candidate = hWnd;
+        if (!IsAltTabWindow(candidate)) {
+            const HWND popup = GetLastActivePopup(hWnd);
+            if (popup == hWnd || !IsAltTabWindow(popup)) {
+                continue;
+            }
+            candidate = popup;
+        }
+        if (AltTabWindowIdentity(candidate) == currentIdentity) {
             continue;
         }
-        target = hWnd;
+        target = candidate;
         if (direction > 0) {
             break;
         }
@@ -572,10 +613,18 @@ std::vector<AltTabWindowData> EnumerateAltTabWindows(const AltTabEnumContext& co
     // toggles between the two most recent ones. Untracked windows keep their
     // Z-order at the tail (stable sort).
     if (!context.ActivationMru.empty() && !altTabWindows.empty()) {
-        const size_t tail = context.ActivationMru.size();
+        // Compare by logical window (top-most owner) so an MRU entry recorded
+        // for a dialog ranks its owner and vice versa.
+        std::vector<HWND> mruIdentities;
+        mruIdentities.reserve(context.ActivationMru.size());
+        for (HWND hWnd : context.ActivationMru) {
+            mruIdentities.push_back(AltTabWindowIdentity(hWnd));
+        }
+        const size_t tail = mruIdentities.size();
         auto rank = [&](const AltTabWindowData& window) -> size_t {
+            const HWND identity = AltTabWindowIdentity(window.hWnd);
             for (size_t i = 0; i < tail; ++i) {
-                if (context.ActivationMru[i] == window.hWnd) {
+                if (mruIdentities[i] == identity) {
                     return i;
                 }
             }
